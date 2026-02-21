@@ -2,8 +2,10 @@
 
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 export default function Hero() {
+  const router = useRouter();
   return (
     <section className="pt-32 pb-20 relative overflow-hidden bg-gradient-to-b from-slate-50 to-white">
       <div className="container mx-auto px-6 text-center max-w-3xl">
@@ -32,9 +34,11 @@ export default function Hero() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.6 }}
         >
-          <Button size="lg">Start System Check</Button>
-          <Button size="lg" variant="outline">
-            View Requirements
+          <Button size="lg" onClick={() => router.push("/register")}>
+            Get Started
+          </Button>
+          <Button size="lg" variant="secondary">
+            Start System Check
           </Button>
         </motion.div>
       </div>
