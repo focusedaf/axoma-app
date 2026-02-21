@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-
 import ExamHeader from "@/components/ui-elements/exam-interface/examHeader";
 import QuestionCard from "@/components/ui-elements/exam-interface/questionCard";
 import ExamSubmitted from "@/components/ui-elements/exam-interface/examSubmitted";
+import Feed from "@/components/ui-elements/exam-interface/feed";
 
 type Question = {
   id: string | number;
@@ -32,7 +32,7 @@ export default function AttemptPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
 
-  // Load exam from primary-server → get CID → fetch from IPFS
+  // Load exam
   useEffect(() => {
     async function loadExam() {
       const metaRes = await fetch(`/api/exams/${examId}`);
@@ -51,7 +51,7 @@ export default function AttemptPage() {
     if (examId) loadExam();
   }, [examId]);
 
-  
+  // Timer
   useEffect(() => {
     if (!timeLeft || submitted) return;
 
@@ -114,23 +114,31 @@ export default function AttemptPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6 space-y-6">
+    <div className="min-h-screen bg-slate-100 p-6">
       <ExamHeader
         examTitle={exam.title}
         timeLeft={formattedTime}
         onSubmit={handleSubmit}
       />
 
-      <QuestionCard
-        currentQuestion={currentQuestion}
-        currentQuestionIndex={currentIndex}
-        totalQuestions={totalQuestions}
-        progressPercent={progressPercent}
-        selectedAnswers={selectedAnswers}
-        onSelectAnswer={handleSelectAnswer}
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-      />
+      <div className="grid grid-cols-3 gap-6 mt-6">
+        <div className="col-span-2">
+          <QuestionCard
+            currentQuestion={currentQuestion}
+            currentQuestionIndex={currentIndex}
+            totalQuestions={totalQuestions}
+            progressPercent={progressPercent}
+            selectedAnswers={selectedAnswers}
+            onSelectAnswer={handleSelectAnswer}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+          />
+        </div>
+
+        <div className="sticky top-6 h-fit">
+          <Feed examId={String(examId)} candidateId="mockCandidateId123" />
+        </div>
+      </div>
     </div>
   );
 }
