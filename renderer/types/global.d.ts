@@ -10,6 +10,13 @@ declare global {
       checkVM: () => Promise<boolean>;
       scanProcesses: () => Promise<string[]>;
       getDeviceFingerprint: () => Promise<string | null>;
+      getNetworkState: () => Promise<
+        { iface: string; ip4: string; mac: string; type: string }[]
+      >;
+      getUsbDevices: () => Promise<
+        { id: string; name: string; vendor: string }[]
+      >;
+      checkOpenPorts: () => Promise<{ port: number; pid: number }[]>;
     };
   }
 }

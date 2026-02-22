@@ -68,32 +68,34 @@ export default function AttemptPage() {
         if (submitted) return;
 
         const displayCount = await window.axoma.checkDisplays();
-        const suspicious = await window.axoma.scanProcesses();
+        const suspiciousProcesses = await window.axoma.scanProcesses();
         const isVM = await window.axoma.checkVM();
+        const openPorts = await window.axoma.checkOpenPorts();
         const currentFingerprint = await window.axoma.getDeviceFingerprint();
 
         const fingerprintMismatch =
           currentFingerprint !== initialFingerprintRef.current;
 
-        if (
+        const violationDetected =
           displayCount > 1 ||
-          suspicious.length > 0 ||
+          suspiciousProcesses.length > 0 ||
           isVM ||
-          fingerprintMismatch
-        ) {
+          fingerprintMismatch ||
+          openPorts.length > 0;
+
+        if (violationDetected) {
           violationCountRef.current += 1;
 
           console.warn("Violation detected", {
             displayCount,
-            suspicious,
+            suspiciousProcesses,
             isVM,
             fingerprintMismatch,
+            openPorts,
             count: violationCountRef.current,
           });
 
           if (violationCountRef.current >= 3) {
-            console.warn("Violation threshold reached. Submitting exam.");
-
             await handleSubmitRef.current();
             window.axoma.exitExamMode();
           }
@@ -132,7 +134,7 @@ export default function AttemptPage() {
         if (!verifyRes.ok) {
           alert("Device mismatch. Access denied.");
           window.axoma.exitExamMode();
-          router.push("/dashboard/exams"); 
+          router.push("/dashboard/exams");
           return;
         }
 

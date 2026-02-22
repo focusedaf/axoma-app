@@ -8,4 +8,7 @@ contextBridge.exposeInMainWorld("axoma", {
   enterExamMode: () => ipcRenderer.invoke("enter-exam-mode"),
   exitExamMode: () => ipcRenderer.invoke("exit-exam-mode"),
   getDeviceFingerprint: () => ipcRenderer.invoke("get-device-fingerprint"),
+  getNetworkState: () => ipcRenderer.invoke("get-network-state"),
+  getUsbDevices: () => ipcRenderer.invoke("get-usb-devices"),
+  checkOpenPorts: () => ipcRenderer.invoke("check-open-ports"),
 });

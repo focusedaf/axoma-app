@@ -112,10 +112,25 @@ ipcMain.handle("scan-processes", async () => {
     "bandicam",
     "fraps",
     "xsplit",
+    "camtasia",
+    "screenrec",
+    "shadowplay",
+    "nvidia share",
+    "xboxgamebar",
     "anydesk",
     "teamviewer",
+    "mstsc",
+    "vnc",
     "vmware",
     "virtualbox",
+    "cmd",
+    "powershell",
+    "pwsh",
+    "wt",
+    "bash",
+    "sh",
+    "zsh",
+    "git-bash",
   ];
 
   const detected = blacklisted.filter((b) =>
@@ -152,5 +167,60 @@ ipcMain.handle("get-device-fingerprint", async () => {
   } catch (err) {
     console.error("Fingerprint generation failed:", err);
     return null;
+  }
+});
+
+ipcMain.handle("get-network-state", async () => {
+  try {
+    const interfaces = await si.networkInterfaces();
+    const active = interfaces.filter(
+      (n) => n.operstate === "up" && !n.internal,
+    );
+
+    return active.map((n) => ({
+      iface: n.iface,
+      ip4: n.ip4,
+      mac: n.mac,
+      type: n.type,
+    }));
+  } catch (err) {
+    console.error("Network check failed:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("get-usb-devices", async () => {
+  try {
+    const devices = await si.usb();
+    return devices.map((d) => ({
+      id: d.id,
+      name: d.name,
+      vendor: d.vendor,
+    }));
+  } catch (err) {
+    console.error("USB check failed:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("check-open-ports", async () => {
+  try {
+    const connections = await si.networkConnections();
+
+    const suspiciousPorts = [3389, 5900, 4444];
+
+    const suspicious = connections.filter((c: any) => {
+      return (
+        c.state === "LISTEN" && suspiciousPorts.includes(Number(c.localPort))
+      );
+    });
+
+    return suspicious.map((c: any) => ({
+      port: Number(c.localPort),
+      pid: c.pid,
+    }));
+  } catch (err) {
+    console.error("Port check failed:", err);
+    return [];
   }
 });
