@@ -32,6 +32,14 @@ export default function AttemptPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
 
+  useEffect(() => {
+    window.axoma?.enterExamMode();
+
+    return () => {
+      window.axoma?.exitExamMode();
+    };
+  }, []);
+
   // Load exam
   useEffect(() => {
     async function loadExam() {
