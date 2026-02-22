@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import ExamHeader from "@/components/ui-elements/exam-interface/examHeader";
 import QuestionCard from "@/components/ui-elements/exam-interface/questionCard";
@@ -22,8 +22,8 @@ type Exam = {
 };
 
 export default function AttemptPage() {
+  const violationCountRef = useRef(0);
   const { examId } = useParams();
-
   const [exam, setExam] = useState<Exam | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<
@@ -31,6 +31,11 @@ export default function AttemptPage() {
   >({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const handleSubmitRef = useRef<() => Promise<void>>(async () => {});
+
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  });
 
   useEffect(() => {
     window.axoma?.enterExamMode();
@@ -39,6 +44,42 @@ export default function AttemptPage() {
       window.axoma?.exitExamMode();
     };
   }, []);
+
+  useEffect(() => {
+    if (!window.axoma) return;
+
+    const interval = setInterval(async () => {
+      try {
+        if (submitted) return;
+
+        const displayCount = await window.axoma.checkDisplays();
+        const suspicious = await window.axoma.scanProcesses();
+        const isVM = await window.axoma.checkVM();
+
+        if (displayCount > 1 || suspicious.length > 0 || isVM) {
+          violationCountRef.current += 1;
+
+          console.warn("Violation detected", {
+            displayCount,
+            suspicious,
+            isVM,
+            count: violationCountRef.current,
+          });
+
+          if (violationCountRef.current >= 3) {
+            console.warn("Violation threshold reached. Submitting exam.");
+
+            await handleSubmitRef.current();
+            window.axoma.exitExamMode();
+          }
+        }
+      } catch (err) {
+        console.error("Proctor check failed:", err);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [submitted]);
 
   // Load exam
   useEffect(() => {

@@ -1,6 +1,8 @@
 import electron from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { screen } from "electron";
+import si from "systeminformation";
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -23,7 +25,7 @@ function createWindow() {
     },
   });
 
-  const port = process.env.NEXT_PORT || 3000;
+  const port = 3000;
   mainWindow.loadURL(`http://localhost:${port}`);
 
   mainWindow.on("close", (e) => {
@@ -63,6 +65,9 @@ ipcMain.handle("enter-exam-mode", () => {
   mainWindow.setAlwaysOnTop(true, "screen-saver");
 
   mainWindow.webContents.closeDevTools();
+  mainWindow.webContents.on("devtools-opened", () => {
+    mainWindow?.webContents.closeDevTools();
+  });
 });
 
 ipcMain.handle("exit-exam-mode", () => {
@@ -73,4 +78,48 @@ ipcMain.handle("exit-exam-mode", () => {
   mainWindow.setKiosk(false);
   mainWindow.setFullScreen(false);
   mainWindow.setAlwaysOnTop(false);
+});
+
+ipcMain.handle("check-displays", () => {
+  const displays = screen.getAllDisplays();
+  return displays.length;
+});
+
+ipcMain.handle("check-vm", async () => {
+  const system = await si.system();
+  const model = system.model?.toLowerCase() || "";
+
+  const suspiciousKeywords = [
+    "virtual",
+    "vmware",
+    "virtualbox",
+    "kvm",
+    "xen",
+    "qemu",
+  ];
+
+  return suspiciousKeywords.some((k) => model.includes(k));
+});
+
+ipcMain.handle("scan-processes", async () => {
+  const processes = await si.processes();
+  const list = processes.list.map((p) => p.name.toLowerCase());
+
+  const blacklisted = [
+    "obs",
+    "obs64",
+    "bandicam",
+    "fraps",
+    "xsplit",
+    "anydesk",
+    "teamviewer",
+    "vmware",
+    "virtualbox",
+  ];
+
+  const detected = blacklisted.filter((b) =>
+    list.some((proc) => proc.includes(b)),
+  );
+
+  return detected;
 });

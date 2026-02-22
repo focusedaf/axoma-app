@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,12 +16,29 @@ export default function SystemCheckPage() {
   const { examId } = useParams();
   const router = useRouter();
 
-  const checks = [
-    { label: "Camera Access", status: true },
-    { label: "Microphone Access", status: true },
-    { label: "Stable Internet", status: true },
-    { label: "Fullscreen Enabled", status: false },
-  ];
+  const [checks, setChecks] = useState([
+    { label: "Single Monitor", status: false },
+    { label: "No Virtual Machine", status: false },
+    { label: "No Suspicious Software", status: false },
+  ]);
+
+  useEffect(() => {
+    async function runChecks() {
+      if (!window.axoma) return;
+
+      const displayCount = await window.axoma.checkDisplays();
+      const isVM = await window.axoma.checkVM();
+      const suspicious = await window.axoma.scanProcesses();
+
+      setChecks([
+        { label: "Single Monitor", status: displayCount === 1 },
+        { label: "No Virtual Machine", status: !isVM },
+        { label: "No Suspicious Software", status: suspicious.length === 0 },
+      ]);
+    }
+
+    runChecks();
+  }, []);
 
   const allPassed = checks.every((c) => c.status);
 
@@ -33,6 +51,7 @@ export default function SystemCheckPage() {
             Ensure your system meets the requirements before starting.
           </CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {checks.map((check) => (
             <div

@@ -12,6 +12,7 @@
   "dependencies": {
     "concurrently": "^9.2.1",
     "electron": "^40.6.0",
+    "systeminformation": "^5.31.1",
     "wait-on": "^9.0.4"
   },
   "devDependencies": {
