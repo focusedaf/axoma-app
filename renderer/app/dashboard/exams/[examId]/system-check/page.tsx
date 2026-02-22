@@ -29,17 +29,30 @@ export default function SystemCheckPage() {
       const displayCount = await window.axoma.checkDisplays();
       const isVM = await window.axoma.checkVM();
       const suspicious = await window.axoma.scanProcesses();
+      const fingerprint = await window.axoma.getDeviceFingerprint();
+
+      if (fingerprint) {
+        await fetch("/api/lock-attempt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            examId,
+            fingerprint,
+          }),
+        });
+      }
 
       setChecks([
         { label: "Single Monitor", status: displayCount === 1 },
         { label: "No Virtual Machine", status: !isVM },
         { label: "No Suspicious Software", status: suspicious.length === 0 },
+        { label: "Device Registered", status: !!fingerprint },
       ]);
     }
 
     runChecks();
   }, []);
-
+  
   const allPassed = checks.every((c) => c.status);
 
   return (

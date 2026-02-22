@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { screen } from "electron";
 import si from "systeminformation";
+import crypto from "crypto";
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -122,4 +123,34 @@ ipcMain.handle("scan-processes", async () => {
   );
 
   return detected;
+});
+
+ipcMain.handle("get-device-fingerprint", async () => {
+  try {
+    const system = await si.system();
+    const baseboard = await si.baseboard();
+    const cpu = await si.cpu();
+    const disk = await si.diskLayout();
+    const network = await si.networkInterfaces();
+
+    const uuid = system.uuid || "";
+    const boardSerial = baseboard.serial || "";
+    const cpuBrand = cpu.brand || "";
+    const diskSerial = disk[0]?.serialNum || "";
+
+    const primaryInterface = network.find(
+      (n) => !n.internal && n.mac && n.mac !== "00:00:00:00:00:00",
+    );
+
+    const mac = primaryInterface?.mac || "";
+
+    const raw = `${uuid}-${boardSerial}-${diskSerial}-${cpuBrand}-${mac}`;
+
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
+
+    return hash;
+  } catch (err) {
+    console.error("Fingerprint generation failed:", err);
+    return null;
+  }
 });

@@ -6,6 +6,7 @@ import ExamHeader from "@/components/ui-elements/exam-interface/examHeader";
 import QuestionCard from "@/components/ui-elements/exam-interface/questionCard";
 import ExamSubmitted from "@/components/ui-elements/exam-interface/examSubmitted";
 import Feed from "@/components/ui-elements/exam-interface/feed";
+import { useRouter } from "next/navigation";
 
 type Question = {
   id: string | number;
@@ -22,6 +23,19 @@ type Exam = {
 };
 
 export default function AttemptPage() {
+  const router = useRouter();
+  const initialFingerprintRef = useRef<string | null>(null);
+  useEffect(() => {
+    async function initFingerprint() {
+      if (!window.axoma) return;
+
+      const fingerprint = await window.axoma.getDeviceFingerprint();
+      initialFingerprintRef.current = fingerprint;
+    }
+
+    initFingerprint();
+  }, []);
+
   const violationCountRef = useRef(0);
   const { examId } = useParams();
   const [exam, setExam] = useState<Exam | null>(null);
@@ -45,6 +59,7 @@ export default function AttemptPage() {
     };
   }, []);
 
+  // monitoring
   useEffect(() => {
     if (!window.axoma) return;
 
@@ -55,14 +70,24 @@ export default function AttemptPage() {
         const displayCount = await window.axoma.checkDisplays();
         const suspicious = await window.axoma.scanProcesses();
         const isVM = await window.axoma.checkVM();
+        const currentFingerprint = await window.axoma.getDeviceFingerprint();
 
-        if (displayCount > 1 || suspicious.length > 0 || isVM) {
+        const fingerprintMismatch =
+          currentFingerprint !== initialFingerprintRef.current;
+
+        if (
+          displayCount > 1 ||
+          suspicious.length > 0 ||
+          isVM ||
+          fingerprintMismatch
+        ) {
           violationCountRef.current += 1;
 
           console.warn("Violation detected", {
             displayCount,
             suspicious,
             isVM,
+            fingerprintMismatch,
             count: violationCountRef.current,
           });
 
@@ -84,17 +109,53 @@ export default function AttemptPage() {
   // Load exam
   useEffect(() => {
     async function loadExam() {
-      const metaRes = await fetch(`/api/exams/${examId}`);
-      const meta = await metaRes.json();
+      try {
+        if (!window.axoma) return;
 
-      const ipfsRes = await fetch(
-        `https://gateway.pinata.cloud/ipfs/${meta.cid}`,
-      );
+        const fingerprint = await window.axoma.getDeviceFingerprint();
 
-      const examJson = await ipfsRes.json();
+        if (!fingerprint) {
+          alert("Device verification failed.");
+          window.axoma.exitExamMode();
+          return;
+        }
 
-      setExam(examJson);
-      setTimeLeft(examJson.duration * 60);
+        const verifyRes = await fetch("/api/verify-lock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            examId,
+            fingerprint,
+          }),
+        });
+
+        if (!verifyRes.ok) {
+          alert("Device mismatch. Access denied.");
+          window.axoma.exitExamMode();
+          router.push("/dashboard/exams"); 
+          return;
+        }
+
+        // only load exam after verification
+        const metaRes = await fetch(`/api/exams/${examId}`);
+        if (!metaRes.ok) throw new Error("Exam metadata failed");
+
+        const meta = await metaRes.json();
+
+        const ipfsRes = await fetch(
+          `https://gateway.pinata.cloud/ipfs/${meta.cid}`,
+        );
+
+        if (!ipfsRes.ok) throw new Error("IPFS fetch failed");
+
+        const examJson = await ipfsRes.json();
+
+        setExam(examJson);
+        setTimeLeft(examJson.duration * 60);
+      } catch (err) {
+        console.error("Exam load failed:", err);
+        window.axoma?.exitExamMode();
+      }
     }
 
     if (examId) loadExam();
@@ -144,24 +205,30 @@ export default function AttemptPage() {
   function handleNext() {
     setCurrentIndex((prev) => Math.min(prev + 1, totalQuestions - 1));
   }
-
   async function handleSubmit() {
     try {
-      await fetch("/api/submit", {
+      const fingerprint = await window.axoma.getDeviceFingerprint();
+
+      const res = await fetch("/api/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           examId,
           answers: selectedAnswers,
+          fingerprint,
         }),
       });
+
+      if (!res.ok) {
+        alert("Device mismatch. Submission blocked.");
+        return;
+      }
 
       setSubmitted(true);
     } catch (err) {
       console.error("Submission failed:", err);
     }
   }
-
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <ExamHeader

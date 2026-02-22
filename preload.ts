@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld("axoma", {
   scanProcesses: () => ipcRenderer.invoke("scan-processes"),
   enterExamMode: () => ipcRenderer.invoke("enter-exam-mode"),
   exitExamMode: () => ipcRenderer.invoke("exit-exam-mode"),
+  getDeviceFingerprint: () => ipcRenderer.invoke("get-device-fingerprint"),
 });

@@ -9,6 +9,7 @@ declare global {
       checkDisplays: () => Promise<number>;
       checkVM: () => Promise<boolean>;
       scanProcesses: () => Promise<string[]>;
+      getDeviceFingerprint: () => Promise<string | null>;
     };
   }
 }
