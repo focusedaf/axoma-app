@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 
-interface StudentProfile {
+interface Profile {
   universityName?: string;
   collegeName?: string;
   majorName?: string;
@@ -15,18 +15,18 @@ interface StudentProfile {
   gradYear?: string;
 }
 
-interface StudentProfileFormProps {
+interface ProfileFormProps {
   className?: string;
-  existingData?: StudentProfile;
+  existingData?: Profile;
   onSuccess?: () => void;
 }
 
-const StudentProfileForm = ({
+const ProfileForm = ({
   className,
   existingData,
   onSuccess,
-}: StudentProfileFormProps) => {
-  const [formData, setFormData] = useState<StudentProfile>({
+}: ProfileFormProps) => {
+  const [formData, setFormData] = useState<Profile>({
     universityName: "",
     collegeName: "",
     majorName: "",
@@ -162,4 +162,4 @@ const StudentProfileForm = ({
   );
 };
 
-export default StudentProfileForm;
+export default ProfileForm;

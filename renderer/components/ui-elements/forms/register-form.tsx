@@ -13,13 +13,15 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
+import { registerCandidate } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export function RegisterForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter();
-
+  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -43,10 +45,15 @@ export function RegisterForm({
 
     try {
       setIsLoading(true);
+
+      const res = await registerCandidate(formData);
+
+      login(res.data.user);
+
       toast.success("Account created successfully!");
       router.push("/onboarding/profile");
     } catch (error: any) {
-      toast.error("Error creating account");
+      toast.error(error?.response?.data?.message || "Error creating account");
     } finally {
       setIsLoading(false);
     }
