@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export function RegisterForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter();
   const { login } = useAuth();
+
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -51,7 +53,7 @@ export function RegisterForm({
       login(res.data.user);
 
       toast.success("Account created successfully!");
-      router.push("/onboarding/profile");
+      router.replace("/onboarding");
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Error creating account");
     } finally {
@@ -67,9 +69,13 @@ export function RegisterForm({
             <h1 className="text-xl font-bold">Welcome to Axoma</h1>
             <FieldDescription>
               Already have an account?{" "}
-              <a href="#" onClick={() => router.push("/login")}>
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                className="underline"
+              >
                 Login
-              </a>
+              </button>
             </FieldDescription>
           </div>
 
@@ -83,6 +89,7 @@ export function RegisterForm({
                 required
               />
             </Field>
+
             <Field>
               <FieldLabel>Last Name</FieldLabel>
               <Input
@@ -140,7 +147,7 @@ export function RegisterForm({
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full sm:flex-1 h-11 font-semibold"
+              className="w-full h-11 font-semibold"
             >
               {isLoading ? <Spinner /> : "Register"}
             </Button>

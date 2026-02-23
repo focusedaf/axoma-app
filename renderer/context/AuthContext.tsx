@@ -8,12 +8,12 @@ import React, {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
+import { fetchCandidateMe, logoutCandidate } from "@/lib/api";
 
 type Candidate = {
   id: string;
   email: string;
-  name: string;
-  token?: string;
+  role: "candidate";
 };
 
 type AuthContextType = {
@@ -21,42 +21,62 @@ type AuthContextType = {
   isAuthenticated: boolean;
   loading: boolean;
   login: (data: Candidate) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
+  fetchMe: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
+
   const [user, setUser] = useState<Candidate | null>(null);
   const [loading, setLoading] = useState(true);
 
-  
-  useEffect(() => {
+ 
+  const fetchMe = useCallback(async () => {
     try {
-      const stored = localStorage.getItem("axoma_candidate");
-
-      if (stored) {
-        const parsed: Candidate = JSON.parse(stored);
-        setUser(parsed);
-      }
-    } catch (err) {
-      console.error("Candidate auth hydration error:", err);
+      const res = await fetchCandidateMe();
+      setUser(res.data.user);
+      localStorage.setItem("axoma_candidate", JSON.stringify(res.data.user));
+    } catch {
+      setUser(null);
       localStorage.removeItem("axoma_candidate");
-    } finally {
-      setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const init = async () => {
+      try {
+        await fetchMe();
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    init();
+
+    return () => {
+      mounted = false;
+    };
+  }, [fetchMe]);
 
   const login = useCallback((data: Candidate) => {
     setUser(data);
     localStorage.setItem("axoma_candidate", JSON.stringify(data));
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     setUser(null);
     localStorage.removeItem("axoma_candidate");
-    router.push("/login");
+
+    try {
+      await logoutCandidate();
+    } catch {}
+
+    router.replace("/login");
   }, [router]);
 
   return (
@@ -67,6 +87,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         loading,
         login,
         logout,
+        fetchMe,
       }}
     >
       {children}
@@ -76,10 +97,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
-
-  if (!ctx) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
-
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
   return ctx;
 };
