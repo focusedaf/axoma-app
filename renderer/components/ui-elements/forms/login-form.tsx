@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,13 +14,16 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Spinner } from "@/components/ui/spinner";
-
+import { loginCandidate } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter();
+  const { login } = useAuth();
+
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -40,10 +44,20 @@ export function LoginForm({
 
     try {
       setIsLoading(true);
+
+      const res = await loginCandidate({
+        email: formData.email,
+        password: formData.password,
+      });
+
+     
+      login(res.data.user);
+
       toast.success("Logged in successfully");
+
       router.push("/dashboard");
-    } catch {
-      toast.error("Invalid email or password");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Invalid email or password");
     } finally {
       setIsLoading(false);
     }
@@ -57,9 +71,13 @@ export function LoginForm({
             <h1 className="text-xl font-bold">Welcome to Axoma</h1>
             <FieldDescription>
               Don&apos;t have an account?{" "}
-              <a href="#" onClick={() => router.push("/register")}>
+              <button
+                type="button"
+                className="text-blue-600 hover:underline"
+                onClick={() => router.push("/register")}
+              >
                 Register
-              </a>
+              </button>
             </FieldDescription>
           </div>
 

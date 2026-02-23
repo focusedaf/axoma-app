@@ -12,6 +12,7 @@ type OnboardingContextType = {
 };
 
 const steps = [
+  "/onboarding",
   "/onboarding/profile",
   "/onboarding/verify-docs",
   "/onboarding/success",
