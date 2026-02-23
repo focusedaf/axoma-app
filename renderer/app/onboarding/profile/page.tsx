@@ -1,4 +1,4 @@
-import ProfileForm from "@/components/ui-elements/forms/verifyDocs-form";
+import ProfileForm from "@/components/ui-elements/forms/profile-form";
 
 export default function ProfilePage() {
   return (

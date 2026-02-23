@@ -1,32 +1,17 @@
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { upsertProfile } from "@/lib/api";
 
+export default function ProfileForm({ className }: { className?: string }) {
+  const router = useRouter();
 
-interface Profile {
-  universityName?: string;
-  collegeName?: string;
-  majorName?: string;
-  currentSem?: string;
-  startYear?: string;
-  gradYear?: string;
-}
-
-interface ProfileFormProps {
-  className?: string;
-  existingData?: Profile;
-  onSuccess?: () => void;
-}
-
-const ProfileForm = ({
-  className,
-  existingData,
-  onSuccess,
-}: ProfileFormProps) => {
-  const [formData, setFormData] = useState<Profile>({
+  const [formData, setFormData] = useState({
     universityName: "",
     collegeName: "",
     majorName: "",
@@ -37,13 +22,8 @@ const ProfileForm = ({
 
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (existingData) setFormData(existingData);
-  }, [existingData]);
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,115 +31,93 @@ const ProfileForm = ({
     setIsLoading(true);
 
     try {
-      const payload = {
-        universityName: formData.universityName,
-        collegeName: formData.collegeName,
-        majorName: formData.majorName,
+      await upsertProfile({
+        ...formData,
         currentSem: Number(formData.currentSem),
-        startYear: formData.startYear,
-        gradYear: formData.gradYear,
-      };
+      });
 
-      let res;
-
-      try {
-       
-        toast.success("Profile saved successfully!");
-      } catch (err: any) {
-        if (err?.response?.status === 409) {
-         
-          toast.success("Profile updated successfully!");
-        } else {
-          throw err;
-        }
-      }
-
-      
-
-      if (onSuccess) onSuccess();
+      toast.success("Profile saved successfully");
+      router.push("/onboarding/verify-docs");
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Error saving profile");
+      toast.error(err?.response?.data?.message || "Failed to save profile");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className={cn("flex flex-col gap-8 w-full md:max-w-7xl", className)}>
-      <form onSubmit={handleSubmit} id="profile-form">
-        <FieldGroup className="flex flex-col sm:flex-row gap-2 justify-between items-stretch">
-          <Field className="w-full max-w-xl">
-            <FieldLabel htmlFor="universityName">University Name</FieldLabel>
-            <Input
-              id="universityName"
-              name="universityName"
-              value={formData.universityName}
-              onChange={handleChange}
-              required
-            />
-          </Field>
-          <Field className="w-full max-w-xl">
-            <FieldLabel htmlFor="collegeName">College Name</FieldLabel>
-            <Input
-              id="collegeName"
-              name="collegeName"
-              value={formData.collegeName}
-              onChange={handleChange}
-              required
-            />
-          </Field>
-        </FieldGroup>
+    <form
+      id="profile-form" 
+      onSubmit={handleSubmit}
+      className={cn("flex flex-col gap-6", className)}
+    >
+      <FieldGroup className="grid md:grid-cols-2 gap-6">
+        <Field>
+          <FieldLabel>University Name</FieldLabel>
+          <Input
+            name="universityName"
+            placeholder="e.g. Stanford University"
+            value={formData.universityName}
+            onChange={handleChange}
+            required
+          />
+        </Field>
 
-        <FieldGroup className="flex flex-col sm:flex-row gap-2 justify-between items-stretch">
-          <Field className="w-full max-w-xl">
-            <FieldLabel htmlFor="majorName">Major Name</FieldLabel>
-            <Input
-              id="majorName"
-              name="majorName"
-              value={formData.majorName}
-              onChange={handleChange}
-              required
-            />
-          </Field>
-          <Field className="w-full max-w-xl">
-            <FieldLabel htmlFor="currentSem">Current Semester</FieldLabel>
-            <Input
-              id="currentSem"
-              name="currentSem"
-              value={formData.currentSem}
-              onChange={handleChange}
-              required
-            />
-          </Field>
-        </FieldGroup>
+        <Field>
+          <FieldLabel>College Name</FieldLabel>
+          <Input
+            name="collegeName"
+            placeholder="e.g. School of Engineering"
+            value={formData.collegeName}
+            onChange={handleChange}
+            required
+          />
+        </Field>
 
-        <FieldGroup className="flex flex-col sm:flex-row gap-2 justify-between items-stretch">
-          <Field className="w-full max-w-xl">
-            <FieldLabel htmlFor="startYear">Batch Start Year</FieldLabel>
-            <Input
-              id="startYear"
-              name="startYear"
-              value={formData.startYear}
-              onChange={handleChange}
-              pattern="\d{4}"
-              required
-            />
-          </Field>
-          <Field className="w-full max-w-xl">
-            <FieldLabel htmlFor="gradYear">Expected Graduation Year</FieldLabel>
-            <Input
-              id="gradYear"
-              name="gradYear"
-              value={formData.gradYear}
-              onChange={handleChange}
-              pattern="\d{4}"
-              required
-            />
-          </Field>
-        </FieldGroup>
-      </form>
-    </div>
+        <Field>
+          <FieldLabel>Major</FieldLabel>
+          <Input
+            name="majorName"
+            placeholder="e.g. Computer Science"
+            value={formData.majorName}
+            onChange={handleChange}
+            required
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel>Current Semester</FieldLabel>
+          <Input
+            name="currentSem"
+            placeholder="e.g. 6"
+            value={formData.currentSem}
+            onChange={handleChange}
+            required
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel>Start Year</FieldLabel>
+          <Input
+            name="startYear"
+            placeholder="2022"
+            value={formData.startYear}
+            onChange={handleChange}
+            required
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel>Graduation Year</FieldLabel>
+          <Input
+            name="gradYear"
+            placeholder="2026"
+            value={formData.gradYear}
+            onChange={handleChange}
+            required
+          />
+        </Field>
+      </FieldGroup>
+    </form>
   );
-};
-
-export default ProfileForm;
+}

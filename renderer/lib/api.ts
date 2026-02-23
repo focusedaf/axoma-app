@@ -58,3 +58,13 @@ export const loginCandidate = (payload: {
 export const fetchCandidateMe = () => api.get("/auth/me");
 
 export const logoutCandidate = () => api.post("/auth/logout");
+
+export const upsertProfile = (payload: any) =>
+  api.post("/onboarding/profile", payload);
+
+export const getProfile = () => api.get("/onboarding/profile");
+
+export const addDocuments = (formData: FormData) =>
+  api.post("/onboarding/documents", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
