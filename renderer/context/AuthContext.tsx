@@ -14,6 +14,8 @@ type Candidate = {
   id: string;
   email: string;
   role: "candidate";
+  firstName?: string; 
+  lastName?: string; 
 };
 
 type AuthContextType = {

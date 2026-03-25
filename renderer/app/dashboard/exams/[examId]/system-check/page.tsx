@@ -11,6 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { CheckCircle, AlertCircle } from "lucide-react";
+import { lockAttemptApi } from "@/lib/api";
 
 export default function SystemCheckPage() {
   const { examId } = useParams();
@@ -32,13 +33,9 @@ export default function SystemCheckPage() {
       const fingerprint = await window.axoma.getDeviceFingerprint();
 
       if (fingerprint) {
-        await fetch("/api/lock-attempt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            examId,
-            fingerprint,
-          }),
+        await lockAttemptApi({
+          examId: String(examId),
+          fingerprint,
         });
       }
 
@@ -52,7 +49,7 @@ export default function SystemCheckPage() {
 
     runChecks();
   }, []);
-  
+
   const allPassed = checks.every((c) => c.status);
 
   return (

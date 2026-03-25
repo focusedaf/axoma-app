@@ -5,7 +5,9 @@ import {
   IconLogout,
   IconUserCircle,
 } from "@tabler/icons-react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,28 +17,36 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useAuth } from "@/context/AuthContext"; 
+
+import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+
+function toTitleCase(str?: string) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
 
 export function NavUser() {
   const { isMobile } = useSidebar();
   const { user, logout } = useAuth();
   const router = useRouter();
 
-  const userName = user?.name;
-  const userEmail = user?.email;
-  const avatarFallback = userName?.[0]?.toUpperCase() || "U";
+  if (!user) return null;
 
-  const handleEditProfile = () => {
-    // router.push("/dashboard/profile");
-  };
+  const displayName =
+    user.firstName && user.lastName
+      ? `${toTitleCase(user.firstName)} ${toTitleCase(user.lastName)}`
+      : toTitleCase(user.firstName) || "User";
+
+  const avatarFallback = displayName[0] || "U";
 
   const handleLogout = async () => {
     await logout();
@@ -48,70 +58,57 @@ export function NavUser() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage
-                  src="/avatars/default.png"
-                  alt={userName ?? "User"}
-                />
-                <AvatarFallback className="rounded-lg">
-                  {avatarFallback}
-                </AvatarFallback>
+            <SidebarMenuButton size="lg">
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage src="/avatars/default.png" />
+                <AvatarFallback>{avatarFallback}</AvatarFallback>
               </Avatar>
+
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">
-                  {userName || "Loading..."}
-                </span>
+                <span className="truncate font-medium">{displayName}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {userEmail || "Fetching..."}
+                  {user.email}
                 </span>
               </div>
+
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg bg-background"
+            className="min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
           >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage
-                    src="/avatars/default.png"
-                    alt={userName ?? "User"}
-                  />
-                  <AvatarFallback className="rounded-lg">
-                    {avatarFallback}
-                  </AvatarFallback>
+                  <AvatarImage src="/avatars/default.png" />
+                  <AvatarFallback>{avatarFallback}</AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">
-                    {userName || "Loading..."}
-                  </span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    {userEmail || "Fetching..."}
+
+                <div className="grid text-sm leading-tight">
+                  <span className="font-medium">{displayName}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {user.email}
                   </span>
                 </div>
               </div>
             </DropdownMenuLabel>
 
             <DropdownMenuSeparator />
+
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={handleEditProfile}>
+              <DropdownMenuItem
+                onClick={() => router.push("/dashboard/profile")}
+              >
                 <IconUserCircle />
                 Edit Profile
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="text-red-500 focus:text-red-700 data-[highlighted]:text-red-700"
-              >
-                <IconLogout className="text-red-500" />
+
+              <DropdownMenuItem onClick={handleLogout} className="text-red-500">
+                <IconLogout />
                 Log out
               </DropdownMenuItem>
             </DropdownMenuGroup>

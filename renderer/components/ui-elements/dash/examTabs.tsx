@@ -1,5 +1,6 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+"use client";
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ExamTabsProps {
   liveCount: number;
@@ -8,7 +9,7 @@ interface ExamTabsProps {
   upcomingContent: React.ReactNode;
   className?: string;
 }
-
+ 
 export function ExamTabs({
   liveCount,
   upcomingCount,
@@ -24,7 +25,6 @@ export function ExamTabs({
       </TabsList>
 
       <TabsContent value="live">{liveContent}</TabsContent>
-
       <TabsContent value="upcoming">{upcomingContent}</TabsContent>
     </Tabs>
   );

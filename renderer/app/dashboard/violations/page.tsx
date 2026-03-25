@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   CardHeader,
@@ -24,100 +24,101 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getAllViolationsApi } from "@/lib/api";
+import { TableSkeleton } from "@/components/ui-elements/skeletons/table-skeleton";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 type Violation = {
   id: string;
-  exam: string;
+  examId: string;
   type: string;
   severity: "Low" | "Medium" | "High";
-  time: string;
+  createdAt: string;
 };
 
 export default function GlobalViolationsPage() {
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState("all");
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const violations: Violation[] = [
-    {
-      id: "1",
-      exam: "Data Structures Midterm",
-      type: "Tab Switch",
-      severity: "Low",
-      time: "12 Feb, 10:32 AM",
-    },
-    {
-      id: "2",
-      exam: "Operating Systems Quiz",
-      type: "Multiple Faces Detected",
-      severity: "High",
-      time: "14 Feb, 11:15 AM",
-    },
-  ];
+  const [page, setPage] = useState(1);
+  const limit = 6;
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await getAllViolationsApi();
+        setViolations(res.data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, []);
 
   const filtered =
     filter === "all"
       ? violations
       : violations.filter((v) => v.severity === filter);
 
-  const total = violations.length;
-  const highCount = violations.filter((v) => v.severity === "High").length;
+  const paginated = filtered.slice((page - 1) * limit, page * limit);
+  const totalPages = Math.ceil(filtered.length / limit);
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <TableSkeleton rows={8} cols={4} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Violation History</h1>
+    
+      {/* FILTER */}
+      <Select onValueChange={(v) => setFilter(v)}>
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Filter severity" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All</SelectItem>
+          <SelectItem value="Low">Low</SelectItem>
+          <SelectItem value="Medium">Medium</SelectItem>
+          <SelectItem value="High">High</SelectItem>
+        </SelectContent>
+      </Select>
 
-      {/* Summary Cards */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Violations</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold">{total}</CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>High Severity</CardTitle>
-          </CardHeader>
-          <CardContent className="text-2xl font-bold text-red-600">
-            {highCount}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filter + Table */}
+      {/* TABLE */}
       <Card>
         <CardHeader>
-          <CardTitle>All Records</CardTitle>
-          <CardDescription>Review violations across all exams.</CardDescription>
+          <CardTitle>All Violations</CardTitle>
+          <CardDescription>Across all exams</CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <Select onValueChange={(value) => setFilter(value)}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by severity" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="Low">Low</SelectItem>
-              <SelectItem value="Medium">Medium</SelectItem>
-              <SelectItem value="High">High</SelectItem>
-            </SelectContent>
-          </Select>
-
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Exam</TableHead>
-                <TableHead>Violation</TableHead>
+                <TableHead>Exam ID</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Severity</TableHead>
                 <TableHead>Time</TableHead>
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {filtered.map((v) => (
+              {paginated.map((v) => (
                 <TableRow key={v.id}>
-                  <TableCell>{v.exam}</TableCell>
+                  <TableCell>{v.examId}</TableCell>
                   <TableCell>{v.type}</TableCell>
                   <TableCell>
                     <Badge
@@ -132,13 +133,46 @@ export default function GlobalViolationsPage() {
                       {v.severity}
                     </Badge>
                   </TableCell>
-                  <TableCell>{v.time}</TableCell>
+                  <TableCell>
+                    {new Date(v.createdAt).toLocaleString()}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+
+          {paginated.length === 0 && (
+            <p className="text-sm text-muted-foreground mt-4">
+              No violations found.
+            </p>
+          )}
         </CardContent>
       </Card>
+
+      {/* PAGINATION */}
+      {totalPages > 1 && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              />
+            </PaginationItem>
+
+            <PaginationItem>
+              <span className="px-3 text-sm">
+                {page} / {totalPages}
+              </span>
+            </PaginationItem>
+
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
     </div>
   );
 }

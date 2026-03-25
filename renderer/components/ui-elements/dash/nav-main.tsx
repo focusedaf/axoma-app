@@ -3,9 +3,11 @@
 import {
   IconLayoutDashboard,
   IconBook,
-  IconHistory,
-  IconChartBar,
+  IconAlertTriangle,
 } from "@tabler/icons-react";
+
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 import {
   SidebarGroup,
@@ -15,42 +17,39 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import Link from "next/link";
+const items = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: IconLayoutDashboard,
+  },
+  {
+    title: "Exams",
+    url: "/dashboard/exams",
+    icon: IconBook,
+  },
+  {
+    title: "Violations",
+    url: "/dashboard/violations",
+    icon: IconAlertTriangle,
+  },
+];
 
 export function NavMain() {
-  const items = [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: IconLayoutDashboard,
-    },
-    {
-      title: "My Exams",
-      url: "/dashboard/exams",
-      icon: IconBook,
-    },
-    {
-      title: "Results",
-      url: "/dashboard/results",
-      icon: IconChartBar,
-    },
-    {
-      title: "History",
-      url: "/dashboard/history",
-      icon: IconHistory,
-    },
-  ];
-
   return (
     <SidebarGroup>
       <SidebarGroupContent>
-        <SidebarMenu>
+        <SidebarMenu className={cn("gap-5")}>
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild>
+              <SidebarMenuButton
+                asChild
+                tooltip={item.title}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted transition-colors"
+              >
                 <Link href={item.url}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
+                  <item.icon className="h-5 w-5" />
+                  <span className="text-sm font-medium">{item.title}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

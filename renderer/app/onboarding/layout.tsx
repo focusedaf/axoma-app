@@ -5,7 +5,14 @@ import { OnboardingProvider, useOnboarding } from "@/context/OnboardingContext";
 import { usePathname, useRouter } from "next/navigation";
 
 function OnboardingInner({ children }: { children: React.ReactNode }) {
-  const { step, totalSteps, nextStep, prevStep } = useOnboarding();
+  const {
+    step,
+    totalSteps,
+    nextStep,
+    prevStep,
+    docsUploaded, 
+  } = useOnboarding();
+
   const pathname = usePathname();
   const router = useRouter();
 
@@ -42,6 +49,7 @@ function OnboardingInner({ children }: { children: React.ReactNode }) {
         hideBack={isFirstStep || isLastStep}
         nextLabel={getNextLabel()}
         formId={getFormId()}
+        isNextDisabled={pathname === "/onboarding/verify-docs" && !docsUploaded}
       >
         {children}
       </OL>

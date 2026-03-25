@@ -9,6 +9,8 @@ type OnboardingContextType = {
   nextStep: () => void;
   prevStep: () => void;
   goToStep: (step: number) => void;
+  docsUploaded: boolean; 
+  setDocsUploaded: (v: boolean) => void; 
 };
 
 const steps = [
@@ -30,7 +32,7 @@ export const OnboardingProvider = ({
   const pathname = usePathname();
   const router = useRouter();
   const totalSteps = steps.length;
-
+  const [docsUploaded, setDocsUploaded] = useState(false);
   const [step, setStep] = useState(1);
 
   useEffect(() => {
@@ -58,7 +60,15 @@ export const OnboardingProvider = ({
 
   return (
     <OnboardingContext.Provider
-      value={{ step, totalSteps, nextStep, prevStep, goToStep }}
+      value={{
+        step,
+        totalSteps,
+        nextStep,
+        prevStep,
+        goToStep,
+        docsUploaded,
+        setDocsUploaded,
+      }}
     >
       {children}
     </OnboardingContext.Provider>

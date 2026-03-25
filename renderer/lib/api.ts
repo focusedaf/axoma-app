@@ -15,7 +15,7 @@ export const api = axios.create({
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (res) => res,
   async (error) => {
     const originalRequest = error.config;
 
@@ -44,19 +44,12 @@ export const registerCandidate = (payload: {
   mobileNumber: string;
   email: string;
   password: string;
-}) => {
-  return api.post("/auth/candidate/register", payload);
-};
+}) => api.post("/auth/candidate/register", payload);
 
-export const loginCandidate = (payload: {
-  email: string;
-  password: string;
-}) => {
-  return api.post("/auth/candidate/login", payload);
-};
+export const loginCandidate = (payload: { email: string; password: string }) =>
+  api.post("/auth/candidate/login", payload);
 
 export const fetchCandidateMe = () => api.get("/auth/me");
-
 export const logoutCandidate = () => api.post("/auth/logout");
 
 export const upsertProfile = (payload: any) =>
@@ -68,3 +61,32 @@ export const addDocuments = (formData: FormData) =>
   api.post("/onboarding/documents", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+
+export const getExamById = (examId: string) => api.get(`/exams/${examId}`);
+
+export const lockAttemptApi = (data: { examId: string; fingerprint: string }) =>
+  api.post("/lock-attempt", data);
+
+export const verifyLockApi = (data: { examId: string; fingerprint: string }) =>
+  api.post("/verify-lock", data);
+
+export const submitExamApi = (data: { examId: string; answers: any }) =>
+  api.post("/submit", data);
+
+export const getResultApi = (examId: string) => api.get(`/results/${examId}`);
+
+export const createViolationApi = (data: {
+  examId: string;
+  type: string;
+  severity: string;
+  metadata?: any;
+}) => api.post("/violations", data);
+
+export const getExamViolationsApi = (examId: string) =>
+  api.get(`/violations/${examId}`);
+
+export const getAllViolationsApi = () => api.get("/violations");
+
+export const getDashboardApi = () => api.get("/dashboard");
+
+export const getAllExamsApi = () => api.get("/exams");
