@@ -180,7 +180,12 @@ export default function AttemptPage() {
     return () => clearInterval(timer);
   }, [timeLeft, submitted]);
 
-  if (!exam) return <div><Skeleton/></div>;
+  if (!exam)
+    return (
+      <div>
+        <Skeleton />
+      </div>
+    );
   if (submitted) return <ExamSubmitted />;
 
   const totalQuestions = exam.questions.length;
