@@ -25,6 +25,7 @@ type Exam = {
   id: string;
   title: string;
   scheduledOn: string;
+  duration: number;
   status: "Upcoming" | "Live" | "Closed";
 };
 
@@ -40,7 +41,29 @@ export default function ExamsPage() {
     async function loadExams() {
       try {
         const res = await getAllExamsApi();
-        setExams(res.data);
+        const now = new Date();
+
+        const updatedExams = res.data.map((exam: any) => {
+          const examDate = new Date(exam.scheduledOn);
+          let status: Exam["status"] = exam.status;
+
+          if (exam.status !== "Closed") {
+            if (
+              now >= examDate &&
+              now <= new Date(examDate.getTime() + exam.duration * 60000)
+            ) {
+              status = "Live";
+            } else if (now < examDate) {
+              status = "Upcoming";
+            } else {
+              status = "Closed";
+            }
+          }
+
+          return { ...exam, status };
+        });
+
+        setExams(updatedExams);
       } catch (err) {
         console.error("Failed to load exams:", err);
       } finally {
@@ -49,6 +72,8 @@ export default function ExamsPage() {
     }
 
     loadExams();
+    const interval = setInterval(loadExams, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <TableSkeleton />;
@@ -56,7 +81,7 @@ export default function ExamsPage() {
   const liveExams = exams.filter((e) => e.status === "Live");
   const upcomingExams = exams.filter((e) => e.status === "Upcoming");
 
-  function renderTable(data: Exam[], page: number, setPage: any) {
+  const renderTable = (data: Exam[], page: number, setPage: any) => {
     const start = (page - 1) * ITEMS_PER_PAGE;
     const paginated = data.slice(start, start + ITEMS_PER_PAGE);
     const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE);
@@ -72,16 +97,13 @@ export default function ExamsPage() {
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
-
             <TableBody>
               {paginated.map((exam) => (
                 <TableRow key={exam.id}>
-                  <TableCell className="font-medium">{exam.title}</TableCell>
-
+                  <TableCell>{exam.title}</TableCell>
                   <TableCell>
                     {new Date(exam.scheduledOn).toLocaleString("en-IN")}
                   </TableCell>
-
                   <TableCell>
                     <Badge
                       variant={
@@ -101,7 +123,6 @@ export default function ExamsPage() {
           </Table>
         </div>
 
-        {/* Pagination */}
         <div className="flex justify-end">
           <Pagination>
             <PaginationContent>
@@ -127,7 +148,7 @@ export default function ExamsPage() {
         </div>
       </div>
     );
-  }
+  };
 
   return (
     <div className="p-6 space-y-6 w-full">
