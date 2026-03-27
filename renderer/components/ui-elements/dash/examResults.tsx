@@ -1,4 +1,6 @@
 "use client";
+
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -9,107 +11,76 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
-export type ResultExam = {
-  id: string;
-  title: string;
-  course: string;
-  attemptedOn: Date;
-  status: "Result Declared" | "Result Pending";
-};
+const ITEMS_PER_PAGE = 5;
 
-interface ExamResultProps {
-  exams: ResultExam[];
-}
+export function ExamResult({ exams }: any) {
+  const [page, setPage] = useState(1);
 
-function formatAttemptedOn(date: Date) {
-  return date.toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-function getStatusVariant(status: ResultExam["status"]) {
-  switch (status) {
-    case "Result Declared":
-      return "default";
-    case "Result Pending":
-      return "secondary";
-    default:
-      return "secondary";
-  }
-}
-
-export function ExamResult({ exams }: ExamResultProps) {
-  const router = useRouter();
+  const totalPages = Math.ceil(exams.length / ITEMS_PER_PAGE);
+  const paginated = exams.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
+  );
 
   return (
-    <div className="border rounded-md">
-      <Table className="text-center">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-center">Exam Title</TableHead>
-            <TableHead className="text-center">Course</TableHead>
-            <TableHead className="text-center">Attempted On</TableHead>
-            <TableHead className="text-center">Status</TableHead>
-            <TableHead className="text-center">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {exams.length === 0 && (
+    <div className="space-y-4">
+      <div className="border rounded-xl">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={5} className="text-center">
-                No results found.
-              </TableCell>
+              <TableHead>Exam</TableHead>
+              <TableHead>Course</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Action</TableHead>
             </TableRow>
-          )}
-          {exams.map((exam) => (
-            <TableRow key={exam.id}>
-              <TableCell className="font-medium text-black">
-                {exam.title}
-              </TableCell>
-              <TableCell className="font-medium text-black">
-                {exam.course}
-              </TableCell>
-              <TableCell className="font-medium text-black">
-                {formatAttemptedOn(exam.attemptedOn)}
-              </TableCell>
-              <TableCell>
-                <Badge variant={getStatusVariant(exam.status)}>
-                  {exam.status}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={exam.status === "Result Pending"}
-                  className="text-black"
-                  onClick={() => {
-                    if (exam.status === "Result Declared") {
-                      toast.promise(
-                        new Promise((resolve) => setTimeout(resolve, 1000)),
-                        {
-                          loading: "Preparing result...",
-                          success: `Result downloaded for "${exam.title}"`,
-                          error: "Download failed",
-                        },
-                      );
-                    }
-                  }}
-                >
-                  Download
-                </Button>
-              </TableCell>
-            </TableRow>
+          </TableHeader>
+
+          <TableBody>
+            {paginated.map((e: any) => (
+              <TableRow key={e.id}>
+                <TableCell>{e.title}</TableCell>
+                <TableCell>{e.course}</TableCell>
+                <TableCell>
+                  {new Date(e.attemptedOn).toLocaleString()}
+                </TableCell>
+                <TableCell>
+                  <Badge>{e.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Button size="sm">Download</Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Pagination className="justify-end">
+        <PaginationContent>
+          <PaginationPrevious onClick={() => setPage(page - 1)} />
+          {Array.from({ length: totalPages }).map((_, i) => (
+            <PaginationItem key={i}>
+              <PaginationLink
+                isActive={page === i + 1}
+                onClick={() => setPage(i + 1)}
+              >
+                {i + 1}
+              </PaginationLink>
+            </PaginationItem>
           ))}
-        </TableBody>
-      </Table>
+          <PaginationNext onClick={() => setPage(page + 1)} />
+        </PaginationContent>
+      </Pagination>
     </div>
   );
 }

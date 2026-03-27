@@ -1,13 +1,9 @@
 "use client";
+
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -16,59 +12,54 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download } from "lucide-react";
-import { RecentResult } from "@/lib/data";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
-interface RecentResultsCardProps {
-  results: RecentResult[];
-}
+const ITEMS_PER_PAGE = 5;
 
-export function RecentResultsCard({ results }: RecentResultsCardProps) {
+export function RecentResultsCard({ results }: any) {
   const router = useRouter();
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.ceil(results.length / ITEMS_PER_PAGE);
+  const paginated = results.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Recent Results</CardTitle>
-        <CardDescription>
-          Your performance on recently completed exams.
-        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Table className="text-center">
+
+      <CardContent className="space-y-4">
+        <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-center">Exam</TableHead>
-              <TableHead className="text-center">Date</TableHead>
-              <TableHead className="text-center">Score</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-center">Details</TableHead>
+              <TableHead>Exam</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Score</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Details</TableHead>
             </TableRow>
           </TableHeader>
+
           <TableBody>
-            {results.map((result) => (
-              <TableRow key={result.id}>
-                <TableCell className="font-medium">{result.exam}</TableCell>
-                <TableCell>{result.date}</TableCell>
-                <TableCell>{result.score}</TableCell>
+            {paginated.map((r: any) => (
+              <TableRow key={r.id}>
+                <TableCell>{r.exam}</TableCell>
+                <TableCell>{r.date}</TableCell>
+                <TableCell>{r.score}</TableCell>
+                <TableCell>{r.status}</TableCell>
                 <TableCell>
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      result.status === "Passed"
-                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                        : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
-                    }`}
-                  >
-                    {result.status}
-                  </span>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push(`/results/${result.id}`)}
-                  >
-                    <Download className="mr-2 h-4 w-4" />
+                  <Button onClick={() => router.push(`/results/${r.id}`)}>
                     Download
                   </Button>
                 </TableCell>
@@ -76,6 +67,23 @@ export function RecentResultsCard({ results }: RecentResultsCardProps) {
             ))}
           </TableBody>
         </Table>
+
+        <Pagination className="justify-end">
+          <PaginationContent>
+            <PaginationPrevious onClick={() => setPage(page - 1)} />
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink
+                  isActive={page === i + 1}
+                  onClick={() => setPage(i + 1)}
+                >
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationNext onClick={() => setPage(page + 1)} />
+          </PaginationContent>
+        </Pagination>
       </CardContent>
     </Card>
   );

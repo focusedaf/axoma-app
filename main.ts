@@ -61,14 +61,19 @@ ipcMain.handle("enter-exam-mode", () => {
 
   isExamMode = true;
 
-  mainWindow.setFullScreen(true);
   mainWindow.setKiosk(true);
+  mainWindow.setFullScreen(true);
   mainWindow.setAlwaysOnTop(true, "screen-saver");
 
+  mainWindow.setMenuBarVisibility(false);
+
   mainWindow.webContents.closeDevTools();
+
   mainWindow.webContents.on("devtools-opened", () => {
     mainWindow?.webContents.closeDevTools();
   });
+
+  mainWindow.focus();
 });
 
 ipcMain.handle("exit-exam-mode", () => {

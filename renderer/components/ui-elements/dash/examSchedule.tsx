@@ -1,4 +1,6 @@
 "use client";
+
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -10,6 +12,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export type Exam = {
   id: string;
@@ -20,102 +30,106 @@ export type Exam = {
   status: "Upcoming" | "Live" | "Closed";
 };
 
-interface ExamScheduleProps {
-  exams: Exam[];
-}
+const ITEMS_PER_PAGE = 5;
 
-function formatScheduledOn(date: Date) {
-  return date.toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
-
-function getStatusVariant(status: Exam["status"]) {
-  switch (status) {
-    case "Live":
-      return "default";
-    case "Upcoming":
-      return "secondary";
-    case "Closed":
-      return "outline";
-    default:
-      return "secondary";
-  }
-}
-
-export function ExamSchedule({ exams }: ExamScheduleProps) {
+export function ExamSchedule({ exams }: { exams: Exam[] }) {
   const router = useRouter();
+  const [page, setPage] = useState(1);
 
-  const handleTakeExam = (examId: string) => {
-    router.push(`/guidelines?examId=${examId}`);
+  const totalPages = Math.ceil(exams.length / ITEMS_PER_PAGE);
+  const paginated = exams.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
+  );
+
+  const goToPage = (p: number) => {
+    if (p < 1 || p > totalPages) return;
+    setPage(p);
   };
 
   return (
-    <div className="border rounded-md">
-      <Table className="text-center">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-center">Exam Title</TableHead>
-            <TableHead className="text-center">Course</TableHead>
-            <TableHead className="text-center">Scheduled On</TableHead>
-            <TableHead className="text-center">Duration</TableHead>
-            <TableHead className="text-center">Status</TableHead>
-            <TableHead className="text-center">Action</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {exams.length === 0 && (
+    <div className="space-y-4">
+      <div className="border rounded-xl bg-white shadow-sm">
+        <Table className="text-center">
+          <TableHeader>
             <TableRow>
-              <TableCell
-                colSpan={6}
-                className="text-center text-muted-foreground py-8"
-              >
-                No exams scheduled.
-              </TableCell>
+              <TableHead>Exam Title</TableHead>
+              <TableHead>Course</TableHead>
+              <TableHead>Scheduled</TableHead>
+              <TableHead>Duration</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Action</TableHead>
             </TableRow>
-          )}
+          </TableHeader>
 
-          {exams.map((exam) => (
-            <TableRow key={exam.id}>
-              <TableCell className="font-medium text-black">
-                {exam.title}
-              </TableCell>
+          <TableBody>
+            {paginated.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6}>No exams</TableCell>
+              </TableRow>
+            )}
 
-              <TableCell className="font-medium text-black">
-                {exam.course || "N/A"}
-              </TableCell>
+            {paginated.map((exam) => (
+              <TableRow key={exam.id}>
+                <TableCell>{exam.title}</TableCell>
+                <TableCell>{exam.course}</TableCell>
+                <TableCell>{exam.scheduledOn.toLocaleString()}</TableCell>
+                <TableCell>{exam.duration} min</TableCell>
+                <TableCell>
+                  <Badge>{exam.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    size="sm"
+                    disabled={exam.status !== "Live"}
+                    onClick={() => {
+                      sessionStorage.removeItem(`guidelines-${exam.id}`);
+                      sessionStorage.removeItem(`verified-${exam.id}`);
+                      router.push(`/dashboard/exams/${exam.id}/guidelines`);
+                    }}
+                  >
+                    Take Exam
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
-              <TableCell className="font-medium text-black">
-                {formatScheduledOn(exam.scheduledOn)}
-              </TableCell>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Pagination className="justify-end">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => goToPage(page - 1)}
+                className={page === 1 ? "pointer-events-none opacity-50" : ""}
+              />
+            </PaginationItem>
 
-              <TableCell className="font-medium text-black">
-                {exam.duration} mins
-              </TableCell>
-
-              <TableCell>
-                <Badge variant={getStatusVariant(exam.status)}>
-                  {exam.status}
-                </Badge>
-              </TableCell>
-
-              <TableCell>
-                <Button
-                  size="sm"
-                  disabled={exam.status !== "Live"}
-                  onClick={() => handleTakeExam(exam.id)}
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink
+                  isActive={page === i + 1}
+                  onClick={() => goToPage(i + 1)}
                 >
-                  Take Exam
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => goToPage(page + 1)}
+                className={
+                  page === totalPages ? "pointer-events-none opacity-50" : ""
+                }
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
     </div>
   );
 }

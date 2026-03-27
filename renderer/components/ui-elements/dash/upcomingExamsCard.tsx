@@ -1,13 +1,9 @@
 "use client";
+
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -16,55 +12,88 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { UpcomingExam } from "@/lib/data"
-import { NotebookPen } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
-interface UpcomingExamsCardProps {
-  exams: UpcomingExam[];
-}
+const ITEMS_PER_PAGE = 5;
 
-export function UpcomingExamsCard({ exams }: UpcomingExamsCardProps) {
-  const router = useRouter(); 
+export function UpcomingExamsCard({ exams }: any) {
+  const router = useRouter();
+  const [page, setPage] = useState(1);
 
-  const handleTakeExam = (examId: string) => {
-    router.push(`/exams/setup/${examId}`);
-  };
+  const totalPages = Math.ceil(exams.length / ITEMS_PER_PAGE);
+  const paginated = exams.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
+  );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Upcoming Exams</CardTitle>
-        <CardDescription>Your scheduled tests. Prepare well!</CardDescription>
       </CardHeader>
-      <CardContent>
+
+      <CardContent className="space-y-4">
         <Table className="text-center">
           <TableHeader>
             <TableRow>
-              <TableHead className="text-center">Exam</TableHead>
-              <TableHead className="text-center">Date</TableHead>
-              <TableHead className="text-center">Time</TableHead>
-              <TableHead className="text-center">Action</TableHead>
+              <TableHead>Exam</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Time</TableHead>
+              <TableHead>Action</TableHead>
             </TableRow>
           </TableHeader>
+
           <TableBody>
-            {exams.map((exam) => (
+            {paginated.map((exam: any) => (
               <TableRow key={exam.id}>
-                <TableCell className="font-medium">{exam.title}</TableCell>
+                <TableCell>{exam.title}</TableCell>
                 <TableCell>{exam.date}</TableCell>
                 <TableCell>{exam.time}</TableCell>
-                <TableCell className="text-center">
+                <TableCell>
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={() => handleTakeExam(exam.id)}
+                    onClick={() =>
+                      router.push(`/dashboard/exams/${exam.id}/guidelines`)
+                    }
                   >
-                    <NotebookPen className="mr-2 h-4 w-4" /> Take Exam
+                    Take Exam
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+
+        {/* Pagination */}
+        <Pagination className="justify-end">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious onClick={() => setPage(page - 1)} />
+            </PaginationItem>
+
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <PaginationItem key={i}>
+                <PaginationLink
+                  isActive={page === i + 1}
+                  onClick={() => setPage(i + 1)}
+                >
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+
+            <PaginationItem>
+              <PaginationNext onClick={() => setPage(page + 1)} />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </CardContent>
     </Card>
   );

@@ -14,10 +14,20 @@ import {
   createViolationApi,
 } from "@/lib/api";
 
+/* ---------------- TYPES ---------------- */
+
+type Option =
+  | string
+  | {
+      id?: string | number;
+      text?: string;
+      value?: string;
+    };
+
 type Question = {
   id: string | number;
   questionText: string;
-  options: string[];
+  options?: Option[];
   image?: string | null;
 };
 
@@ -28,12 +38,23 @@ type Exam = {
   questions: Question[];
 };
 
+/* ---------------- HELPERS ---------------- */
+
+const normalizeOptions = (options?: Option[]) => {
+  if (!options) return [];
+  return options.map((opt) =>
+    typeof opt === "string" ? opt : opt.text || opt.value || String(opt.id),
+  );
+};
+
+/* ---------------- COMPONENT ---------------- */
+
 export default function AttemptPage() {
   const router = useRouter();
   const { examId } = useParams();
 
-  const initialFingerprintRef = useRef<string | null>(null);
   const violationCountRef = useRef(0);
+  const handleSubmitRef = useRef<() => Promise<void>>(async () => {});
 
   const [exam, setExam] = useState<Exam | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -42,132 +63,97 @@ export default function AttemptPage() {
   >({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleSubmitRef = useRef<() => Promise<void>>(async () => {});
+  /* ---------------- FLOW GUARD ---------------- */
+  useEffect(() => {
+    const guidelines = sessionStorage.getItem(`guidelines-${examId}`);
+    const verified = sessionStorage.getItem(`verified-${examId}`);
 
-  // store submit ref
+    if (!guidelines) {
+      router.replace(`/dashboard/exams/${examId}/guidelines`);
+      return;
+    }
+
+    if (!verified) {
+      router.replace(`/dashboard/exams/${examId}/system-check`);
+      return;
+    }
+  }, [examId]);
+
+  /* ---------------- STORE SUBMIT REF ---------------- */
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   });
 
-  // init fingerprint
+  /* ---------------- PROCTOR ---------------- */
   useEffect(() => {
-    async function init() {
-      if (!window.axoma) return;
-      const fp = await window.axoma.getDeviceFingerprint();
-      initialFingerprintRef.current = fp;
-    }
-
-    init();
-  }, []);
-
-  // exam mode
-  useEffect(() => {
-    window.axoma?.enterExamMode();
-
-    return () => {
-      window.axoma?.exitExamMode();
-    };
-  }, []);
-
-  // monitoring
-  useEffect(() => {
-    if (!window.axoma) return;
-
     const interval = setInterval(async () => {
       try {
-        if (submitted) return;
+        if (!window.axoma || submitted) return;
 
-        const displayCount = await window.axoma.checkDisplays();
-        const suspiciousProcesses = await window.axoma.scanProcesses();
-        const isVM = await window.axoma.checkVM();
-        const openPorts = await window.axoma.checkOpenPorts();
-        const currentFingerprint = await window.axoma.getDeviceFingerprint();
+        const [display, proc, vm] = await Promise.all([
+          window.axoma.checkDisplays(),
+          window.axoma.scanProcesses(),
+          window.axoma.checkVM(),
+        ]);
 
-        const fingerprintMismatch =
-          currentFingerprint !== initialFingerprintRef.current;
+        const violation = display > 1 || proc.length > 0 || vm;
 
-        const violationDetected =
-          displayCount > 1 ||
-          suspiciousProcesses.length > 0 ||
-          isVM ||
-          fingerprintMismatch ||
-          openPorts.length > 0;
-
-        if (violationDetected) {
-          violationCountRef.current += 1;
+        if (violation) {
+          violationCountRef.current++;
 
           await createViolationApi({
             examId: String(examId),
             type: "PROCTOR_VIOLATION",
             severity: "HIGH",
-            metadata: {
-              displayCount,
-              suspiciousProcesses,
-              isVM,
-              fingerprintMismatch,
-              openPorts,
-            },
           });
 
           if (violationCountRef.current >= 3) {
             await handleSubmitRef.current();
-            window.axoma.exitExamMode();
           }
         }
-      } catch (err) {
-        console.error("Proctor check failed:", err);
-      }
+      } catch {}
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [submitted, examId]);
+  }, [submitted]);
 
-  // load exam
+  /* ---------------- LOAD EXAM ---------------- */
   useEffect(() => {
-    async function loadExam() {
+    async function load() {
       try {
-        if (!window.axoma) return;
+        setLoading(true);
 
-        const fingerprint = await window.axoma.getDeviceFingerprint();
+        const fp = await window.axoma?.getDeviceFingerprint();
 
-        if (!fingerprint) {
-          alert("Device verification failed");
-          window.axoma.exitExamMode();
-          return;
+        if (fp) {
+          await verifyLockApi({ examId: String(examId), fingerprint: fp });
         }
 
-        await verifyLockApi({
-          examId: String(examId),
-          fingerprint,
-        });
+        const meta = (await getExamById(String(examId))).data;
 
-        const metaRes = await getExamById(String(examId));
-        const meta = metaRes.data;
-
-        const ipfsRes = await fetch(
-          `https://gateway.pinata.cloud/ipfs/${meta.cid}`,
-        );
-
-        const examJson = await ipfsRes.json();
+        const examJson = await (
+          await fetch(`https://gateway.pinata.cloud/ipfs/${meta.cid}`)
+        ).json();
 
         setExam(examJson);
         setTimeLeft(examJson.duration * 60);
-      } catch (err) {
-        console.error("Exam load failed:", err);
-        window.axoma?.exitExamMode();
+      } catch {
         router.push("/dashboard/exams");
+      } finally {
+        setLoading(false);
       }
     }
 
-    if (examId) loadExam();
-  }, [examId, router]);
+    if (examId) load();
+  }, [examId]);
 
-  // timer
+  /* ---------------- TIMER ---------------- */
   useEffect(() => {
     if (!timeLeft || submitted) return;
 
-    const timer = setInterval(() => {
+    const t = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           handleSubmitRef.current();
@@ -177,81 +163,58 @@ export default function AttemptPage() {
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => clearInterval(t);
   }, [timeLeft, submitted]);
 
-  if (!exam)
-    return (
-      <div>
-        <Skeleton />
-      </div>
-    );
+  const handleSubmit = async () => {
+    await submitExamApi({
+      examId: String(examId),
+      answers: selectedAnswers,
+    });
+    setSubmitted(true);
+  };
+
+  if (loading || !exam) return <Skeleton className="h-64 w-full" />;
   if (submitted) return <ExamSubmitted />;
 
-  const totalQuestions = exam.questions.length;
-  const currentQuestion = exam.questions[currentIndex];
-
-  const progressPercent = ((currentIndex + 1) / totalQuestions) * 100;
-
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = timeLeft % 60;
-
-  const formattedTime = `${minutes}:${seconds.toString().padStart(2, "0")}`;
-
-  function handleSelectAnswer(option: string) {
-    const questionId = String(currentQuestion.id);
-
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [questionId]: option,
-    }));
-  }
-
-  function handlePrevious() {
-    setCurrentIndex((prev) => Math.max(prev - 1, 0));
-  }
-
-  function handleNext() {
-    setCurrentIndex((prev) => Math.min(prev + 1, totalQuestions - 1));
-  }
-
-  async function handleSubmit() {
-    try {
-      await submitExamApi({
-        examId: String(examId),
-        answers: selectedAnswers,
-      });
-
-      setSubmitted(true);
-    } catch (err) {
-      console.error("Submission failed:", err);
-    }
-  }
+  const q = exam.questions[currentIndex];
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
+    <div className="min-h-screen bg-muted/40 p-6">
       <ExamHeader
         examTitle={exam.title}
-        timeLeft={formattedTime}
+        timeLeft={`${Math.floor(timeLeft / 60)}:${(timeLeft % 60)
+          .toString()
+          .padStart(2, "0")}`}
         onSubmit={handleSubmit}
       />
 
-      <div className="grid grid-cols-3 gap-6 mt-6">
-        <div className="col-span-2">
+      <div className="grid lg:grid-cols-3 gap-6 mt-6">
+        <div className="lg:col-span-2">
           <QuestionCard
-            currentQuestion={currentQuestion}
+            currentQuestion={{
+              ...q,
+              options: normalizeOptions(q.options),
+            }}
             currentQuestionIndex={currentIndex}
-            totalQuestions={totalQuestions}
-            progressPercent={progressPercent}
+            totalQuestions={exam.questions.length}
+            progressPercent={((currentIndex + 1) / exam.questions.length) * 100}
             selectedAnswers={selectedAnswers}
-            onSelectAnswer={handleSelectAnswer}
-            onPrevious={handlePrevious}
-            onNext={handleNext}
+            onSelectAnswer={(val) =>
+              setSelectedAnswers((p) => ({
+                ...p,
+                [String(q.id)]: val,
+              }))
+            }
+            onPrevious={() => setCurrentIndex((i) => Math.max(i - 1, 0))}
+            onNext={() =>
+              setCurrentIndex((i) => Math.min(i + 1, exam.questions.length - 1))
+            }
           />
         </div>
 
-        <div className="sticky top-6 h-fit">
-          <Feed examId={String(examId)} candidateId="mockCandidateId123" />
+        <div className="sticky top-6">
+          <Feed examId={String(examId)} candidateId="candidate-123" />
         </div>
       </div>
     </div>
