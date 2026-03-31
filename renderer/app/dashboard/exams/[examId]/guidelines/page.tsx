@@ -2,67 +2,75 @@
 
 import { useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+
 import {
   Capture,
   type CaptureHandle,
 } from "@/components/ui-elements/dash/capture";
+
 import { toast } from "sonner";
-import { Camera, Loader2, Upload } from "lucide-react";
+import { Camera } from "lucide-react";
 
 export default function GuidelinesPage() {
   const { examId } = useParams();
   const router = useRouter();
+
   const cameraRef = useRef<CaptureHandle>(null);
 
   const [approved, setApproved] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [captured, setCaptured] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  
 
   const handleCapture = async () => {
     const img = await cameraRef.current?.capture();
-    if (!img) return toast.error("Capture failed");
-    setCapturedImage(img);
-    toast.success("Captured successfully");
+
+    if (!img) {
+      toast.error("Capture failed");
+      return;
+    }
+
+    setCaptured(true);
+    toast.success("Face captured successfully");
   };
 
-  const handleContinue = () => {
-    if (!capturedImage) return;
+  
 
-    sessionStorage.setItem(`guidelines-${examId}`, "true");
+  const handleContinue = async () => {
+    setLoading(true);
     router.push(`/dashboard/exams/${examId}/system-check`);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/40 p-6">
-      <Card className="w-full max-w-5xl shadow-xl rounded-2xl">
+      <Card className="w-full max-w-5xl rounded-2xl shadow-xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-semibold">
-            Pre-Exam Guidelines
-          </CardTitle>
+          <CardTitle>Pre-Exam Guidelines</CardTitle>
         </CardHeader>
 
         <CardContent className="grid md:grid-cols-2 gap-10">
           {/* LEFT */}
-          <div className="space-y-4 text-sm text-muted-foreground">
+          <div className="space-y-3 text-sm text-muted-foreground">
             <ul className="space-y-2">
               <li>• Proper lighting required</li>
-              <li>• Face clearly visible</li>
+              <li>• Face must be visible</li>
               <li>• No tab switching</li>
-              <li>• Camera ON at all times</li>
-              <li>• No other person allowed</li>
+              <li>• No external devices</li>
+              <li>• Camera must stay ON</li>
             </ul>
 
             <div className="flex items-center gap-2 pt-4">
               <Checkbox
-                id="agree"
                 checked={approved}
                 onCheckedChange={(v) => setApproved(v as boolean)}
               />
-              <Label htmlFor="agree">I agree to follow the guidelines</Label>
+              <Label>I agree to follow these guidelines</Label>
             </div>
           </div>
 
@@ -72,7 +80,7 @@ export default function GuidelinesPage() {
               <Capture ref={cameraRef} />
             </div>
 
-            <div className="w-full max-w-sm space-y-3 mt-5">
+            <div className="w-full max-w-sm mt-5 space-y-3">
               <Button
                 onClick={handleCapture}
                 disabled={!approved}
@@ -83,20 +91,13 @@ export default function GuidelinesPage() {
                 Capture Photo
               </Button>
 
-              {capturedImage && (
-                <Button
-                  onClick={handleContinue}
-                  disabled={loading}
-                  className="w-full"
-                >
-                  {loading ? (
-                    <Loader2 className="animate-spin mr-2 h-4 w-4" />
-                  ) : (
-                    <Upload className="mr-2 h-4 w-4" />
-                  )}
-                  Continue to System Check
-                </Button>
-              )}
+              <Button
+                onClick={handleContinue}
+                disabled={!captured || loading}
+                className="w-full"
+              >
+                Continue
+              </Button>
             </div>
           </div>
         </CardContent>

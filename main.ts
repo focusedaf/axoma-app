@@ -1,7 +1,7 @@
 import electron from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
-import { screen } from "electron";
+import { screen, globalShortcut } from "electron";
 import si from "systeminformation";
 import crypto from "crypto";
 
@@ -13,219 +13,227 @@ const __dirname = path.dirname(__filename);
 let mainWindow: Electron.BrowserWindow | null = null;
 let isExamMode = false;
 
+const NEXT_PORT = 3000;
+const isDev = !app.isPackaged;
+
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      devTools: true,
+      devTools: isDev,
     },
   });
 
-  const port = 3000;
-  mainWindow.loadURL(`http://localhost:${port}`);
+  mainWindow.loadURL(`http://localhost:${NEXT_PORT}`);
+
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+
+  /* DEV ESCAPE */
+
+  if (isDev) {
+    globalShortcut.register("Escape", () => {
+      if (isExamMode) {
+        console.log("🧪 ESC pressed → exiting kiosk");
+        exitKiosk();
+      }
+    });
+
+    globalShortcut.register("CommandOrControl+Shift+I", () => {
+      mainWindow?.webContents.openDevTools({ mode: "detach" });
+    });
+  }
+
+  /* BLOCK COMMON CHEAT SHORTCUTS */
+
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (!isExamMode) return;
+
+    const blocked =
+      input.key === "Tab" ||
+      input.key === "Escape" ||
+      input.key === "F11" ||
+      input.key === "F12" ||
+      (input.control && input.key.toLowerCase() === "w") ||
+      (input.control && input.key.toLowerCase() === "r") ||
+      (input.alt && input.key === "Tab");
+
+    if (blocked) {
+      event.preventDefault();
+    }
+  });
+
+  /* ROUTE DETECTION */
+
+  const handleNavigation = (url: string) => {
+    console.log("Navigation:", url);
+
+    const examFlow =
+      url.includes("/dashboard/exams/") &&
+      (url.includes("/guidelines") ||
+        url.includes("/system-check") ||
+        url.includes("/attempt"));
+
+    const examFinished =
+      url.includes("/dashboard/exams/") &&
+      (url.includes("/results") || url.includes("/violations"));
+
+    if (examFlow) enterKiosk();
+    if (examFinished) exitKiosk();
+  };
+
+  mainWindow.webContents.on("did-navigate", (_e, url) => handleNavigation(url));
+  mainWindow.webContents.on("did-navigate-in-page", (_e, url) =>
+    handleNavigation(url),
+  );
+
+  /* SECURITY */
+
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 
   mainWindow.on("close", (e) => {
     if (isExamMode) {
       e.preventDefault();
+      console.warn("Blocked close during exam");
     }
   });
 
-  mainWindow.webContents.setWindowOpenHandler(() => {
-    return { action: "deny" };
+  mainWindow.on("blur", () => {
+    if (isExamMode) {
+      mainWindow?.focus();
+    }
   });
 }
 
-app.whenReady().then(createWindow);
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
 
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+function enterKiosk() {
+  if (!mainWindow || isExamMode) return;
 
-// exam mode
-
-ipcMain.handle("enter-exam-mode", () => {
-  if (!mainWindow) return;
+  console.log("ENTERING KIOSK");
 
   isExamMode = true;
 
-  mainWindow.setKiosk(true);
-  mainWindow.setFullScreen(true);
   mainWindow.setAlwaysOnTop(true, "screen-saver");
-
+  mainWindow.setVisibleOnAllWorkspaces(true);
+  mainWindow.setKiosk(true);
   mainWindow.setMenuBarVisibility(false);
+}
 
-  mainWindow.webContents.closeDevTools();
+function exitKiosk() {
+  if (!mainWindow || !isExamMode) return;
 
-  mainWindow.webContents.on("devtools-opened", () => {
-    mainWindow?.webContents.closeDevTools();
-  });
-
-  mainWindow.focus();
-});
-
-ipcMain.handle("exit-exam-mode", () => {
-  if (!mainWindow) return;
+  console.log("EXITING KIOSK");
 
   isExamMode = false;
 
   mainWindow.setKiosk(false);
   mainWindow.setFullScreen(false);
   mainWindow.setAlwaysOnTop(false);
+  mainWindow.setVisibleOnAllWorkspaces(false);
+}
+
+
+
+app.whenReady().then(createWindow);
+
+app.on("will-quit", () => globalShortcut.unregisterAll());
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
 
-ipcMain.handle("check-displays", () => {
-  const displays = screen.getAllDisplays();
-  return displays.length;
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+
+
+
+ipcMain.handle("enter-exam-mode", () => enterKiosk());
+ipcMain.handle("exit-exam-mode", () => exitKiosk());
+
+
+ipcMain.handle("check-displays", () => screen.getAllDisplays().length);
 
 ipcMain.handle("check-vm", async () => {
-  const system = await si.system();
-  const model = system.model?.toLowerCase() || "";
+  const sys = await si.system();
+  const model = sys.model?.toLowerCase() || "";
 
-  const suspiciousKeywords = [
-    "virtual",
-    "vmware",
-    "virtualbox",
-    "kvm",
-    "xen",
-    "qemu",
-  ];
+  const keywords = ["virtual", "vmware", "virtualbox", "kvm", "xen", "qemu"];
 
-  return suspiciousKeywords.some((k) => model.includes(k));
+  return keywords.some((k) => model.includes(k));
 });
 
 ipcMain.handle("scan-processes", async () => {
   const processes = await si.processes();
   const list = processes.list.map((p) => p.name.toLowerCase());
 
-  const blacklisted = [
+  const blacklist = [
     "obs",
-    "obs64",
     "bandicam",
-    "fraps",
     "xsplit",
     "camtasia",
-    "screenrec",
-    "shadowplay",
-    "nvidia share",
-    "xboxgamebar",
     "anydesk",
     "teamviewer",
-    "mstsc",
     "vnc",
     "vmware",
     "virtualbox",
-    "cmd",
-    "powershell",
-    "pwsh",
-    "wt",
-    "bash",
-    "sh",
-    "zsh",
-    "git-bash",
   ];
 
-  const detected = blacklisted.filter((b) =>
-    list.some((proc) => proc.includes(b)),
-  );
-
-  return detected;
+  return blacklist.filter((b) => list.some((p) => p.includes(b)));
 });
+
 
 ipcMain.handle("get-device-fingerprint", async () => {
   try {
-    const system = await si.system();
-    const baseboard = await si.baseboard();
+    const sys = await si.system();
+    const board = await si.baseboard();
     const cpu = await si.cpu();
-    const disk = await si.diskLayout();
-    const network = await si.networkInterfaces();
+    const disks = await si.diskLayout();
+    const nets = await si.networkInterfaces();
 
-    const uuid = system.uuid || "";
-    const boardSerial = baseboard.serial || "";
-    const cpuBrand = cpu.brand || "";
-    const diskSerial = disk[0]?.serialNum || "";
+    const mac =
+      nets.find((n) => !n.internal && n.mac)?.mac ||
+      nets[0]?.mac ||
+      crypto.randomUUID();
 
-    const primaryInterface = network.find(
-      (n) => !n.internal && n.mac && n.mac !== "00:00:00:00:00:00",
-    );
+    const disk = disks[0]?.serialNum || disks[0]?.device || "disk";
 
-    const mac = primaryInterface?.mac || "";
+    const raw = `${sys.manufacturer}-${sys.model}-${board.serial}-${cpu.brand}-${disk}-${mac}`;
 
-    const raw = `${uuid}-${boardSerial}-${diskSerial}-${cpuBrand}-${mac}`;
-
-    const hash = crypto.createHash("sha256").update(raw).digest("hex");
-
-    return hash;
-  } catch (err) {
-    console.error("Fingerprint generation failed:", err);
-    return null;
+    return crypto.createHash("sha256").update(raw).digest("hex");
+  } catch {
+    return crypto.randomUUID();
   }
+});
+
+
+ipcMain.handle("get-usb-devices", async () => {
+  const usb = await si.usb();
+  return usb;
 });
 
 ipcMain.handle("get-network-state", async () => {
-  try {
-    const interfaces = await si.networkInterfaces();
-    const active = interfaces.filter(
-      (n) => n.operstate === "up" && !n.internal,
-    );
-
-    return active.map((n) => ({
-      iface: n.iface,
-      ip4: n.ip4,
-      mac: n.mac,
-      type: n.type,
-    }));
-  } catch (err) {
-    console.error("Network check failed:", err);
-    return [];
-  }
-});
-
-ipcMain.handle("get-usb-devices", async () => {
-  try {
-    const devices = await si.usb();
-    return devices.map((d) => ({
-      id: d.id,
-      name: d.name,
-      vendor: d.vendor,
-    }));
-  } catch (err) {
-    console.error("USB check failed:", err);
-    return [];
-  }
+  const nets = await si.networkInterfaces();
+  return nets.filter((n) => n.operstate === "up" && !n.internal);
 });
 
 ipcMain.handle("check-open-ports", async () => {
-  try {
-    const connections = await si.networkConnections();
+  const conns = await si.networkConnections();
 
-    const suspiciousPorts = [3389, 5900, 4444];
+  const suspicious = [3389, 5900, 4444];
 
-    const suspicious = connections.filter((c: any) => {
-      return (
-        c.state === "LISTEN" && suspiciousPorts.includes(Number(c.localPort))
-      );
-    });
-
-    return suspicious.map((c: any) => ({
-      port: Number(c.localPort),
-      pid: c.pid,
-    }));
-  } catch (err) {
-    console.error("Port check failed:", err);
-    return [];
-  }
+  return conns.filter(
+    (c: any) =>
+      c.state === "LISTEN" && suspicious.includes(Number(c.localPort)),
+  );
 });

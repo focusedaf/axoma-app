@@ -7,82 +7,104 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { lockAttemptApi } from "@/lib/api";
 
+type Check = {
+  label: string;
+  status: boolean;
+};
+
 export default function SystemCheckPage() {
   const { examId } = useParams();
   const router = useRouter();
 
-  const [checks, setChecks] = useState<any[]>([]);
-  const [phase, setPhase] = useState<"entering" | "checking" | "done">(
-    "entering",
-  );
-useEffect(() => {
-  async function waitForAxoma() {
-    return new Promise<boolean>((resolve) => {
-      if (window.axoma) return resolve(true);
+  const [checks, setChecks] = useState<Check[]>([]);
+  const [loading, setLoading] = useState(true);
 
-      let timeout = setTimeout(() => resolve(false), 3000);
+  /* WAIT FOR ELECTRON BRIDGE */
 
-      window.addEventListener("message", (event) => {
-        if (event.data?.type === "AXOMA_READY") {
-          clearTimeout(timeout);
-          resolve(true);
-        }
-      });
-    });
-  }
+  async function waitForBridge() {
+    let tries = 0;
 
-  async function run() {
-    try {
-      const ready = await waitForAxoma();
-
-      if (!ready) {
-        console.error("AXOMA NOT READY");
-        setChecks([{ label: "Kiosk Mode Active", status: false }]);
-        setPhase("done");
-        return;
-      }
-
-      // 🔥 ENTER KIOSK (NOW IT WILL ACTUALLY WORK)
-      await window.axoma.enterExamMode();
-
-      setPhase("checking");
-
-      const [display, vm, proc, fp] = await Promise.all([
-        window.axoma.checkDisplays(),
-        window.axoma.checkVM(),
-        window.axoma.scanProcesses(),
-        window.axoma.getDeviceFingerprint(),
-      ]);
-
-      if (fp && display === 1 && !vm && proc.length === 0) {
-        await lockAttemptApi({
-          examId: String(examId),
-          fingerprint: fp,
-        });
-      }
-
-      setChecks([
-        { label: "Kiosk Mode Active", status: true },
-        { label: "Single Monitor", status: display === 1 },
-        { label: "No Virtual Machine", status: !vm },
-        { label: "No Suspicious Software", status: proc.length === 0 },
-        { label: "Device Registered", status: !!fp },
-      ]);
-
-      setPhase("done");
-    } catch (err) {
-      console.error(err);
-
-      setChecks([{ label: "System Check Failed", status: false }]);
-      setPhase("done");
+    while (!window.axoma && tries < 30) {
+      await new Promise((r) => setTimeout(r, 100));
+      tries++;
     }
+
+    return window.axoma;
   }
 
-  run();
-}, [examId]);
+  useEffect(() => {
+    async function runChecks() {
+      try {
+        const axoma = await waitForBridge();
 
-  const allPassed =
-    phase === "done" && checks.length > 0 && checks.every((c) => c.status);
+        if (!axoma) {
+          console.error("Electron bridge not found");
+          throw new Error("Bridge missing");
+        }
+
+        const [display, vm, processes, fingerprint] = await Promise.all([
+          axoma.checkDisplays(),
+          axoma.checkVM(),
+          axoma.scanProcesses(),
+          axoma.getDeviceFingerprint(),
+        ]);
+
+        /* CAMERA + MIC */
+
+        let cameraOk = false;
+        let micOk = false;
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+
+          cameraOk = stream.getVideoTracks().length > 0;
+          micOk = stream.getAudioTracks().length > 0;
+
+          stream.getTracks().forEach((t) => t.stop());
+        } catch {}
+
+        const results: Check[] = [
+          { label: "Single Monitor", status: display === 1 },
+          { label: "No Virtual Machine", status: !vm },
+          { label: "No Suspicious Processes", status: processes.length === 0 },
+          { label: "Device Fingerprint", status: !!fingerprint },
+          { label: "Camera Access", status: cameraOk },
+          { label: "Microphone Access", status: micOk },
+        ];
+
+        setChecks(results);
+
+        const allPassed = results.every((c) => c.status);
+
+        if (allPassed && fingerprint) {
+          await lockAttemptApi({
+            examId: String(examId),
+            fingerprint,
+          });
+        }
+      } catch (err) {
+        console.error("System check failed", err);
+
+        setChecks([
+          { label: "Single Monitor", status: false },
+          { label: "No Virtual Machine", status: false },
+          { label: "No Suspicious Processes", status: false },
+          { label: "Device Fingerprint", status: false },
+          { label: "Camera Access", status: false },
+          { label: "Microphone Access", status: false },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    runChecks();
+  }, [examId]);
+
+  const allPassed = checks.length > 0 && checks.every((c) => c.status);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/40 p-6">
@@ -91,46 +113,34 @@ useEffect(() => {
           <CardTitle>System Verification</CardTitle>
         </CardHeader>
 
-        <CardContent className="space-y-5">
-          {/* PHASE UI */}
-          {phase === "entering" && (
+        <CardContent className="space-y-3">
+          {loading && (
             <div className="flex items-center gap-2 text-sm">
               <Loader2 className="animate-spin w-4 h-4" />
-              Entering secure exam mode...
+              Running checks...
             </div>
           )}
 
-          {phase === "checking" && (
-            <div className="flex items-center gap-2 text-sm">
-              <Loader2 className="animate-spin w-4 h-4" />
-              Running system checks...
-            </div>
-          )}
-
-          {/* CHECKLIST */}
-          {phase === "done" &&
+          {!loading &&
             checks.map((c) => (
               <div
                 key={c.label}
-                className="flex justify-between items-center border p-3 rounded-lg"
+                className="flex justify-between items-center border rounded-xl px-4 py-3"
               >
-                <span>{c.label}</span>
+                <span className="text-sm">{c.label}</span>
+
                 {c.status ? (
-                  <CheckCircle className="text-green-500" />
+                  <CheckCircle className="text-green-500 w-5 h-5" />
                 ) : (
-                  <AlertCircle className="text-red-500" />
+                  <AlertCircle className="text-red-500 w-5 h-5" />
                 )}
               </div>
             ))}
 
-          {/* BUTTON */}
           <Button
             disabled={!allPassed}
             className="w-full mt-4"
-            onClick={() => {
-              sessionStorage.setItem(`verified-${examId}`, "true");
-              router.push(`/dashboard/exams/${examId}/attempt`);
-            }}
+            onClick={() => router.push(`/dashboard/exams/${examId}/attempt`)}
           >
             Start Exam
           </Button>

@@ -2,11 +2,14 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+
 import ExamHeader from "@/components/ui-elements/exam-interface/examHeader";
 import QuestionCard from "@/components/ui-elements/exam-interface/questionCard";
 import ExamSubmitted from "@/components/ui-elements/exam-interface/examSubmitted";
 import Feed from "@/components/ui-elements/exam-interface/feed";
+
 import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   verifyLockApi,
   getExamById,
@@ -14,21 +17,10 @@ import {
   createViolationApi,
 } from "@/lib/api";
 
-/* ---------------- TYPES ---------------- */
-
-type Option =
-  | string
-  | {
-      id?: string | number;
-      text?: string;
-      value?: string;
-    };
-
 type Question = {
   id: string | number;
   questionText: string;
-  options?: Option[];
-  image?: string | null;
+  options?: any[];
 };
 
 type Exam = {
@@ -38,16 +30,18 @@ type Exam = {
   questions: Question[];
 };
 
-/* ---------------- HELPERS ---------------- */
+/* WAIT FOR ELECTRON */
 
-const normalizeOptions = (options?: Option[]) => {
-  if (!options) return [];
-  return options.map((opt) =>
-    typeof opt === "string" ? opt : opt.text || opt.value || String(opt.id),
-  );
-};
+async function waitForBridge(): Promise<any> {
+  let tries = 0;
 
-/* ---------------- COMPONENT ---------------- */
+  while (!(window as any).axoma && tries < 100) {
+    await new Promise((r) => setTimeout(r, 100));
+    tries++;
+  }
+
+  return (window as any).axoma;
+}
 
 export default function AttemptPage() {
   const router = useRouter();
@@ -61,75 +55,26 @@ export default function AttemptPage() {
   const [selectedAnswers, setSelectedAnswers] = useState<
     Record<string, string>
   >({});
+
   const [timeLeft, setTimeLeft] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  /* ---------------- FLOW GUARD ---------------- */
+  /* LOAD EXAM */
+
   useEffect(() => {
-    const guidelines = sessionStorage.getItem(`guidelines-${examId}`);
-    const verified = sessionStorage.getItem(`verified-${examId}`);
-
-    if (!guidelines) {
-      router.replace(`/dashboard/exams/${examId}/guidelines`);
-      return;
-    }
-
-    if (!verified) {
-      router.replace(`/dashboard/exams/${examId}/system-check`);
-      return;
-    }
-  }, [examId]);
-
-  /* ---------------- STORE SUBMIT REF ---------------- */
-  useEffect(() => {
-    handleSubmitRef.current = handleSubmit;
-  });
-
-  /* ---------------- PROCTOR ---------------- */
-  useEffect(() => {
-    const interval = setInterval(async () => {
+    async function loadExam() {
       try {
-        if (!window.axoma || submitted) return;
+        const axoma = await waitForBridge();
 
-        const [display, proc, vm] = await Promise.all([
-          window.axoma.checkDisplays(),
-          window.axoma.scanProcesses(),
-          window.axoma.checkVM(),
-        ]);
+        if (!axoma) throw new Error("Bridge missing");
 
-        const violation = display > 1 || proc.length > 0 || vm;
+        const fingerprint = await axoma.getDeviceFingerprint();
 
-        if (violation) {
-          violationCountRef.current++;
-
-          await createViolationApi({
-            examId: String(examId),
-            type: "PROCTOR_VIOLATION",
-            severity: "HIGH",
-          });
-
-          if (violationCountRef.current >= 3) {
-            await handleSubmitRef.current();
-          }
-        }
-      } catch {}
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [submitted]);
-
-  /* ---------------- LOAD EXAM ---------------- */
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-
-        const fp = await window.axoma?.getDeviceFingerprint();
-
-        if (fp) {
-          await verifyLockApi({ examId: String(examId), fingerprint: fp });
-        }
+        await verifyLockApi({
+          examId: String(examId),
+          fingerprint,
+        });
 
         const meta = (await getExamById(String(examId))).data;
 
@@ -139,21 +84,23 @@ export default function AttemptPage() {
 
         setExam(examJson);
         setTimeLeft(examJson.duration * 60);
-      } catch {
+      } catch (err) {
+        console.error(err);
         router.push("/dashboard/exams");
       } finally {
         setLoading(false);
       }
     }
 
-    if (examId) load();
+    if (examId) loadExam();
   }, [examId]);
 
-  /* ---------------- TIMER ---------------- */
+  /* TIMER */
+
   useEffect(() => {
     if (!timeLeft || submitted) return;
 
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           handleSubmitRef.current();
@@ -163,24 +110,76 @@ export default function AttemptPage() {
       });
     }, 1000);
 
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [timeLeft, submitted]);
 
+  /* PROCTOR CHECK */
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        if (submitted) return;
+
+        const axoma = await waitForBridge();
+
+        const [displayCount, processes, vmDetected] = await Promise.all([
+          axoma.checkDisplays(),
+          axoma.scanProcesses(),
+          axoma.checkVM(),
+        ]);
+
+        const violation =
+          displayCount > 1 || processes.length > 0 || vmDetected;
+
+        if (violation) {
+          violationCountRef.current++;
+
+          await createViolationApi({
+            examId: String(examId),
+            type: "SYSTEM_VIOLATION",
+            severity: "HIGH",
+            metadata: { displayCount, processes, vmDetected },
+          });
+
+          if (violationCountRef.current >= 3) {
+            await handleSubmitRef.current();
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [submitted]);
+
+  /* SUBMIT */
+
   const handleSubmit = async () => {
-    await submitExamApi({
-      examId: String(examId),
-      answers: selectedAnswers,
-    });
-    setSubmitted(true);
+    try {
+      await submitExamApi({
+        examId: String(examId),
+        answers: selectedAnswers,
+      });
+
+      setSubmitted(true);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  });
+
   if (loading || !exam) return <Skeleton className="h-64 w-full" />;
+
   if (submitted) return <ExamSubmitted />;
 
   const q = exam.questions[currentIndex];
 
   return (
-    <div className="min-h-screen bg-muted/40 p-6">
+    <div className="min-h-screen bg-muted/40 p-6 relative">
       <ExamHeader
         examTitle={exam.title}
         timeLeft={`${Math.floor(timeLeft / 60)}:${(timeLeft % 60)
@@ -189,13 +188,14 @@ export default function AttemptPage() {
         onSubmit={handleSubmit}
       />
 
+      <div className="fixed top-6 right-6 w-72 z-50">
+        <Feed examId={String(examId)} candidateId="self" />
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-6 mt-6">
         <div className="lg:col-span-2">
           <QuestionCard
-            currentQuestion={{
-              ...q,
-              options: normalizeOptions(q.options),
-            }}
+            currentQuestion={q}
             currentQuestionIndex={currentIndex}
             totalQuestions={exam.questions.length}
             progressPercent={((currentIndex + 1) / exam.questions.length) * 100}
@@ -211,10 +211,6 @@ export default function AttemptPage() {
               setCurrentIndex((i) => Math.min(i + 1, exam.questions.length - 1))
             }
           />
-        </div>
-
-        <div className="sticky top-6">
-          <Feed examId={String(examId)} candidateId="candidate-123" />
         </div>
       </div>
     </div>

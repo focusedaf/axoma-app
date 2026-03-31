@@ -12,75 +12,130 @@ interface FeedProps {
 
 export default function Feed({ examId, candidateId }: FeedProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const peerRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+
+  const SERVER_URL = process.env.NEXT_PUBLIC_PROCTOR_SERVER;
+
   useEffect(() => {
+    let frameInterval: NodeJS.Timeout;
+    let lastAudioSend = 0;
+
     const startStreaming = async () => {
       try {
-        // Get webcam
+      
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: false,
+          audio: true,
         });
 
         streamRef.current = stream;
 
+      
+
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          await videoRef.current.play();
         }
 
-        // Create peer connection
-        const peer = new RTCPeerConnection();
-        peerRef.current = peer;
+       
 
-        // Add tracks
-        stream.getTracks().forEach((track) => {
-          peer.addTrack(track, stream);
-        });
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
 
-        // Create offer
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
+        frameInterval = setInterval(async () => {
+          if (!videoRef.current || !ctx) return;
 
-        // Send offer to proctor server
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_PROCTOR_SERVER}/webrtc/offer`,
-          {
+          const v = videoRef.current;
+
+          if (v.videoWidth === 0) return;
+
+          canvas.width = v.videoWidth;
+          canvas.height = v.videoHeight;
+
+          ctx.drawImage(v, 0, 0);
+
+          const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, "image/jpeg", 0.6),
+          );
+
+          if (!blob) return;
+
+          const formData = new FormData();
+          formData.append("file", blob);
+          formData.append("examId", examId);
+          formData.append("candidateId", candidateId);
+
+          await fetch(`${SERVER_URL}/process-frame`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              offer,
-              examId,
-              candidateId,
-            }),
-          },
-        );
+            body: formData,
+          });
+        }, 800);
 
-        const data = await response.json();
+       
 
-        // Set remote answer
-        await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
 
-        toast.success("Proctoring started");
-      } catch (error) {
-        console.error(error);
-        toast.error("Failed to start proctoring");
+        await audioContext.audioWorklet.addModule("/audio-processor.js");
+
+        const source = audioContext.createMediaStreamSource(stream);
+
+        const workletNode = new AudioWorkletNode(audioContext, "pcm-processor");
+        workletNodeRef.current = workletNode;
+
+        source.connect(workletNode);
+        workletNode.connect(audioContext.destination);
+
+
+        workletNode.port.onmessage = async (event) => {
+          const now = Date.now();
+
+          // throttle audio sending
+          if (now - lastAudioSend < 250) return;
+
+          lastAudioSend = now;
+
+          const float32Buffer = event.data;
+
+          try {
+            await fetch(`${SERVER_URL}/process-audio`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/octet-stream",
+              },
+              body: float32Buffer.buffer,
+            });
+          } catch (err) {
+            console.error("Audio send failed", err);
+          }
+        };
+
+        toast.success("Proctoring started (Video + Audio)");
+      } catch (err) {
+        console.error(err);
+        toast.error("Camera or microphone failed");
       }
     };
 
     startStreaming();
 
     return () => {
-      // Cleanup
-      peerRef.current?.close();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      clearInterval(frameInterval);
+
+      workletNodeRef.current?.disconnect();
+      audioContextRef.current?.close();
+
+      streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, [examId, candidateId]);
 
   return (
-    <Card className="relative w-full rounded-xl overflow-hidden border shadow-md bg-black">
-      <div className="aspect-video relative">
+    <Card className="relative w-full rounded-xl overflow-hidden bg-black">
+      <div className="aspect-video">
         <video
           ref={videoRef}
           autoPlay
@@ -88,7 +143,8 @@ export default function Feed({ examId, candidateId }: FeedProps) {
           playsInline
           className="w-full h-full object-cover -scale-x-100"
         />
-        <Badge className="absolute top-3 left-3 bg-red-600 text-white animate-pulse shadow-md">
+
+        <Badge className="absolute top-2 left-2 bg-red-600 text-white animate-pulse">
           LIVE
         </Badge>
       </div>
